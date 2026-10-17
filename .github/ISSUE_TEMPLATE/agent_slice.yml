@@ -1,0 +1,26 @@
+name: Agent work slice
+description: Scoped, verifiable task for an autonomous coding agent
+title: "[Slice]: "
+labels: ["agent-slice"]
+body:
+  - type: input
+    id:paths
+    attributes:
+      label: Target file paths / globs
+      placeholder: "src/core/**, tests/**"
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: Verifiable conditions that must hold when the slice completes.
+    validations:
+      required: true
+  - type: input
+    id: verify_cmd
+    attributes:
+      label: Verification command
+      placeholder: "npm test"
+    validations:
+      required: true

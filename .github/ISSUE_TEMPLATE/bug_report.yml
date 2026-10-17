@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible defect or regression
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What broke, and what is the observable symptom?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Exact commands or steps to reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Expected behavior
+      description: How we will verify the fix passes.
+    validations:
+      required: true
