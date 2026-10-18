@@ -1,0 +1,14 @@
+# Starlight Intelligence (Starlight-Intelligence) — Organization Default CODEOWNERS
+# Website: https://starlightintelligence.ai
+# Brand ID: sis | Governance Mode: active
+# Steward Agent: steward-starlight
+# Executive Seat: CTO (Technology & Infrastructure) + CDO (Data & Memory)
+# Universal IS: Starlight Orchestrator,Code IS,Second Brain IS,Voice & Video IS
+# Council Lead: starlight-architect,starlight-orchestrator,starlight-sentinel
+# Primary Harnesses: Claude Code, Antigravity, Codex, Grok, Hermes
+#
+# Human approval gate (Maker != Checker invariant):
+* @frankxai
+/.github/ @frankxai
+/AGENTS.md @frankxai
+/SECURITY.md @frankxai
