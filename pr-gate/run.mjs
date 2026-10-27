@@ -6,15 +6,17 @@ import { decide } from './decide.mjs';
 
 const token = process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
-let number = Number(process.env.PR_NUMBER) || 0;
-const relayHead = String(process.env.PR_HEAD_SHA || '').toLowerCase();
+const rawNumber = String(process.env.PR_NUMBER || '').trim();
 const merge = process.env.PR_GATE_MERGE === 'true';
 const waitMinutes = Number(process.env.PR_GATE_WAIT_MINUTES || 8);
 const selfPrefix = (process.env.PR_GATE_SELF_PREFIX || 'pr-gate').toLowerCase();
 const requiredChecks = String(process.env.PR_GATE_REQUIRED_CHECKS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const STICKY = '<!-- starlight-pr-gate -->';
 
-if (!token || !repo || (!number && !relayHead)) { console.error('GITHUB_TOKEN, GITHUB_REPOSITORY and PR_NUMBER or PR_HEAD_SHA are required'); process.exit(2); }
+if (!token || !repo) { console.error('GITHUB_TOKEN and GITHUB_REPOSITORY are required'); process.exit(2); }
+// A CI run with no PR attached passes its own title here; that is not a PR to judge.
+if (!/^[1-9][0-9]{0,8}$/.test(rawNumber)) { console.log(`no PR number in "${rawNumber.slice(0, 80)}"; nothing to judge`); process.exit(0); }
+const number = Number(rawNumber);
 const [owner, name] = repo.split('/');
 
 async function api(path, init = {}) {
@@ -36,18 +38,6 @@ async function all(path) {
     if (items.length < 100) return out;
   }
   throw new Error(`${path} has more than 5,000 items`);
-}
-
-// A review relayed through workflow_run can arrive without its PR attached. Resolve it from the
-// head commit, accepting only a single open PR in this repo whose head is exactly that commit.
-async function resolveFromHead(sha) {
-  const pulls = await api(`/repos/${repo}/commits/${sha}/pulls`);
-  const hit = pulls.filter((p) => p.state === 'open' && p.head.sha.toLowerCase() === sha && p.head.repo?.full_name === repo);
-  return hit.length === 1 ? hit[0].number : 0;
-}
-if (!number) {
-  number = await resolveFromHead(relayHead);
-  if (!number) { console.log(`no single open PR in ${repo} has head ${relayHead}; nothing to judge`); process.exit(0); }
 }
 // Every page, and a GraphQL error is a failure: a missing answer must never read as zero threads.
 async function unresolvedThreads() {
