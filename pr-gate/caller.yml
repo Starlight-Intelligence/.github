@@ -1,0 +1,38 @@
+# Copy to .github/workflows/pr-gate.yml in a product repo. Replace GATE_SHA (both places) with a
+# commit of Starlight-Intelligence/.github, and set merge to true only where autonomous landing is ruled.
+name: pr-gate
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
+  pull_request_review:
+    types: [submitted, dismissed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  checks: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-gate:
+    # Comments only re-run the gate when they could change the answer: a sign-off, a checker line,
+    # a bot review result, or an explicit /gate.
+    if: >-
+      github.event_name != 'issue_comment' || (
+        github.event.issue.pull_request && (
+          contains(github.event.comment.body, '/gate') ||
+          contains(github.event.comment.body, 'starlight-signoff') ||
+          contains(github.event.comment.body, 'Checker:') ||
+          github.event.comment.user.type == 'Bot'))
+    uses: Starlight-Intelligence/.github/.github/workflows/pr-gate.yml@GATE_SHA
+    with:
+      pr-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+      merge: false
+      gate-ref: GATE_SHA
