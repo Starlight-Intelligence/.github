@@ -37,38 +37,43 @@ export function shaMatches(head, given) {
 const MARKER_RE = /^\s*starlight-signoff:\s*harness=(\S+)\s+verdict=(\S+)\s+sha=([0-9a-fA-F]{7,40})\b/i;
 const CHECKER_RE = /^\s*Checker:\s*([a-z0-9_-]+?)(?:-cloud)?\s*[·|-]\s*head\s+([0-9a-fA-F]{7,40})\s*[·|-]\s*verdict\s+(PASS|FAIL|BLOCK)\b/i;
 const CODEX_CLEAN_RE = /didn'?t find any major issues/i;
+const SEVERE_RE = /\bP[01]\b|P[01] Badge/;
 
-const isBot = (u) => u && (u.type === 'Bot' || /\[bot\]$/.test(u.login || ''));
-const botHarness = (u) => {
-  const l = String(u?.login || '').toLowerCase();
-  if (/codex/.test(l)) return 'codex';
-  if (/^claude/.test(l)) return 'claude';
-  return null;
-};
+// GitHub's own bot accounts are the only reviewer identity an agent cannot type its way into.
+// Exact logins on purpose: a substring match would accept any app whose name contains "codex".
+const BOT_HARNESS = { 'chatgpt-codex-connector[bot]': 'codex', 'claude[bot]': 'claude' };
+const botHarness = (u) => (u && u.type === 'Bot' ? BOT_HARNESS[String(u.login || '').toLowerCase()] || null : null);
 
-// Turn comments and reviews into sign-offs. Codex counts only from its GitHub bot identity, so an
-// agent typing "Codex found no issues" from the shared account signs nothing.
-export function collectSignoffs({ comments = [], reviews = [], headSha, headCommittedAt }) {
+// Turn comments and reviews into sign-offs. Typed lines (the estate `starlight-signoff` marker and
+// `Checker:` lines) are collected but marked unauthenticated: every harness posts as the same human
+// account, so anyone, the author included, can write one. They never count toward a pass here; the
+// estate `tools/pr-gate.mjs` still honours them for a human-run merge.
+export function collectSignoffs({ comments = [], reviews = [], headSha }) {
+  const head = String(headSha || '').toLowerCase();
   const out = [];
   for (const c of comments) {
     for (const line of String(c.body || '').split('\n')) {
       let m = MARKER_RE.exec(line);
-      if (m) { out.push({ harness: m[1].toLowerCase(), verdict: m[2].toLowerCase(), sha: m[3].toLowerCase(), via: 'marker' }); continue; }
+      if (m) { out.push({ harness: m[1].toLowerCase(), verdict: m[2].toLowerCase(), sha: m[3].toLowerCase(), via: 'typed', trusted: false }); continue; }
       m = CHECKER_RE.exec(line);
-      if (m) out.push({ harness: m[1].toLowerCase(), verdict: m[3].toLowerCase(), sha: m[2].toLowerCase(), via: 'checker-line' });
+      if (m) out.push({ harness: m[1].toLowerCase(), verdict: m[3].toLowerCase(), sha: m[2].toLowerCase(), via: 'typed', trusted: false });
     }
-    // Codex's clean result arrives as a comment with no commit id, so bind it by time instead: it
-    // only counts if it was posted after the head commit.
-    if (isBot(c.user) && botHarness(c.user) === 'codex' && CODEX_CLEAN_RE.test(c.body || '')
-        && headCommittedAt && Date.parse(c.createdAt) > Date.parse(headCommittedAt)) {
-      out.push({ harness: 'codex', verdict: 'pass', sha: String(headSha).toLowerCase(), via: 'codex-comment' });
+    // A bot comment has no commit id, so it counts only when it names the head commit itself.
+    const h = botHarness(c.user);
+    if (h && CODEX_CLEAN_RE.test(c.body || '') && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
+      out.push({ harness: h, verdict: 'pass', sha: head, via: 'bot-comment', trusted: true });
     }
   }
   for (const r of reviews) {
-    const h = isBot(r.user) ? botHarness(r.user) : null;
-    if (!h) continue;
-    const verdict = r.state === 'CHANGES_REQUESTED' ? 'block' : 'pass';
-    out.push({ harness: h, verdict, sha: String(r.commitId || '').toLowerCase(), via: 'bot-review' });
+    const h = botHarness(r.user);
+    if (!h || r.state === 'DISMISSED' || r.state === 'PENDING') continue;
+    const body = String(r.body || '');
+    let verdict = null;
+    if (r.state === 'CHANGES_REQUESTED' || SEVERE_RE.test(body)) verdict = 'block';
+    else if (r.state === 'APPROVED' || CODEX_CLEAN_RE.test(body)) verdict = 'pass';
+    // A COMMENTED review that neither approves nor says it is clean is not a verdict either way;
+    // its inline findings surface as unresolved threads.
+    if (verdict) out.push({ harness: h, verdict, sha: String(r.commitId || '').toLowerCase(), via: 'bot-review', trusted: true });
   }
   return out;
 }
@@ -97,12 +102,19 @@ export function protectedReasons(files = []) {
 
 // CI counts only as check runs. Commit statuses are excluded on purpose: anything holding a token
 // can post `state=success`, which is how 20 PRs merged on 2026-10-19 with no check having run.
-export function ciState(checkRuns = [], selfPrefix = 'pr-gate') {
+// Each repo names the checks that must pass; one unrelated green check is not CI.
+export function ciState(checkRuns = [], required = [], selfPrefix = 'pr-gate') {
   const runs = checkRuns.filter((r) => !String(r.name || '').toLowerCase().startsWith(selfPrefix));
   const bad = runs.filter((r) => r.status === 'completed' && ['failure', 'cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure'].includes(r.conclusion));
   const pending = runs.filter((r) => r.status !== 'completed');
-  const passed = runs.filter((r) => r.status === 'completed' && r.conclusion === 'success');
-  return { bad, pending, passed, total: runs.length };
+  const missing = [];
+  const notPassed = [];
+  for (const name of required) {
+    const r = runs.find((x) => x.name === name);
+    if (!r) missing.push(name);
+    else if (r.status === 'completed' && r.conclusion !== 'success') notPassed.push(`${name} (${r.conclusion})`);
+  }
+  return { bad, pending, missing, notPassed };
 }
 
 const HOLD_LABELS = ['hold', 'do-not-merge', 'blocked', 'wip'];
@@ -112,7 +124,8 @@ export function decide(f) {
   const author = harnessOfBranch(f.headRef);
   const head = String(f.headSha || '').toLowerCase();
   const labels = (f.labels || []).map((l) => String(l).toLowerCase());
-  const signoffs = collectSignoffs({ comments: f.comments, reviews: f.reviews, headSha: head, headCommittedAt: f.headCommittedAt });
+  const all = collectSignoffs({ comments: f.comments, reviews: f.reviews, headSha: head });
+  const signoffs = all.filter((s) => s.trusted);
   const onHead = (s) => shaMatches(head, s.sha);
 
   const reasons = [];
@@ -136,16 +149,23 @@ export function decide(f) {
     else waiting.push(`needs a review from a harness other than ${author} on ${head.slice(0, 7)}`);
   }
 
+  if (f.incomplete) reasons.push(`could not read the whole PR: ${f.incomplete}`);
   if ((f.unresolvedThreads || 0) > 0) reasons.push(`${f.unresolvedThreads} unresolved review thread(s)`);
 
-  const ci = ciState(f.checkRuns, f.selfPrefix);
+  const required = f.requiredChecks || [];
+  const ci = ciState(f.checkRuns, required, f.selfPrefix);
+  if (!required.length) reasons.push('no required CI checks are configured for this repo');
   if (ci.bad.length) reasons.push(`CI failing: ${ci.bad.map((r) => r.name).join(', ')}`);
+  if (ci.notPassed.length) reasons.push(`required check did not pass: ${ci.notPassed.join(', ')}`);
   if (ci.pending.length) waiting.push(`CI still running: ${ci.pending.map((r) => r.name).join(', ')}`);
-  else if (!ci.passed.length) reasons.push('no CI check run has passed on this commit (commit statuses do not count)');
+  else if (ci.missing.length) reasons.push(`required check never ran on this commit: ${ci.missing.join(', ')} (commit statuses do not count)`);
 
+  // No label can override this: every harness acts as the same account, so a label proves nothing
+  // about who applied it. Protected changes are merged by Frank, outside this gate.
   const prot = protectedReasons(f.files);
-  if (prot.length && !labels.includes('frank-approved')) reasons.push(...prot.map((p) => `Frank's call: ${p}`));
+  if (prot.length) reasons.push(...prot.map((p) => `Frank merges this one: ${p}`));
 
+  const typed = all.filter((s) => !s.trusted && s.verdict === 'pass' && onHead(s) && s.harness !== author);
   return {
     ok: reasons.length === 0 && waiting.length === 0,
     pending: reasons.length === 0 && waiting.length > 0,
@@ -154,5 +174,6 @@ export function decide(f) {
     author,
     head,
     signers: [...new Set(valid.map((s) => s.harness))],
+    advisory: [...new Set(typed.map((s) => s.harness))],
   };
 }

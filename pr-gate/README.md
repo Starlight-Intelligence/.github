@@ -1,38 +1,38 @@
 # pr-gate
 
-The estate merge gate, running on GitHub instead of a laptop. A pull request passes when all of these hold on its current head commit:
+The estate merge gate, running on GitHub instead of a laptop. On the PR's current head commit it passes only when:
 
-- A harness other than the author reviewed that exact commit. The author is read from the branch prefix, because every harness pushes as the same GitHub account.
-- At least one CI check run passed and none failed. Commit statuses do not count: anything with a token can post one, which is how 20 PRs merged on 2026-10-19 with no check having run.
-- No unresolved review threads, no `hold` / `do-not-merge` / `blocked` / `wip` label, not a draft.
-- The body links the intent it serves: an issue, a board item or a ruling.
-- Nothing touches a path that is Frank's call (workflows, env, dependencies, money, auth and middleware, deploy config, a new or deleted public page) unless the PR carries `frank-approved`.
+- A review from a GitHub bot identity of a different harness than the author exists for that commit: `chatgpt-codex-connector[bot]` (Codex) or `claude[bot]` (Claude). The author is read from the branch prefix, because every harness pushes as the same GitHub account.
+- That review is an approval, or a Codex result saying it found no major issues. Dismissed and pending reviews are ignored; a bot review mentioning P0 or P1 blocks.
+- Every check named in the repo's `required-checks` has a latest attempt that succeeded, no other check failed, and nothing is still running. Commit statuses never count: anything holding a token can post one, which is how 20 PRs merged on 2026-10-19 with no check having run.
+- All review threads are resolved (every page read; an unreadable answer blocks) and the full list of changed files was read.
+- It is not a draft, carries no `hold` / `do-not-merge` / `blocked` / `wip` label, and its body links the intent it serves (an issue, board item or ruling).
+- It touches none of Frank's paths: workflows, env files, dependencies, money, auth and middleware, `vercel.json`, or a new or deleted public page. No label overrides this. Labels prove nothing about who applied them on a shared account, so Frank merges those himself.
 
-## What counts as a review
+In merge mode it decides again from fresh facts just before merging and merges with a head-SHA guard.
 
-| Source | Harness | Bound to the commit by |
-| --- | --- | --- |
-| Codex GitHub review (`chatgpt-codex-connector[bot]`) | codex | the review's commit id |
-| Codex bot comment "Didn't find any major issues" | codex | posted after the head commit |
-| `Checker: claude-cloud · head <sha> · verdict PASS` | claude | the sha in the line |
-| `starlight-signoff: harness=<h> verdict=pass sha=<sha>` (estate `tools/pr-gate.mjs`) | `<h>` | the sha in the line |
-| A review from a `claude*` bot | claude | the review's commit id |
+## What does not count
 
-A Codex verdict counts only from the Codex bot account. Typed lines from the shared account are trusted the same way the estate gate always trusted them, so they are only as strong as the agents writing them.
+Typed lines (`starlight-signoff: ...` from the estate `tools/pr-gate.mjs`, `Checker: claude-cloud · head <sha> · verdict PASS`) are shown as advisory but never pass the gate: the author can type them. The estate `pr-gate.mjs` still honours them for a merge a human runs.
+
+So today, Claude-authored PRs pass once Codex reviews them. Codex- and Gemini-authored PRs pass only after a review from the Claude GitHub bot, or a human-run merge.
 
 Branch prefixes: `agent/claude/`, `claude/`, `ccr-` and `factory/` (Foreman, whose implementer is an Anthropic model) are Claude; `codex/`, `agent/codex/`, `agent/gpt*` are Codex; `agent/antigravity/`, `agent/gemini/`, Jules and `sentinel-` branches are Gemini.
 
 ## Install in a repo
 
-1. Copy `caller.yml` to `.github/workflows/pr-gate.yml` and replace both `GATE_SHA` with a commit of this repo.
-2. Turn on Codex code review and automatic reviews for the repo in Codex settings, so Claude-authored PRs get a non-Claude review with no laptop involved.
-3. Add the review rules from `CODE-REVIEW-RULES.md` to the repo's `AGENTS.md`.
+1. Copy `caller.yml` to `.github/workflows/pr-gate.yml` and `poke.yml` to `.github/workflows/pr-gate-poke.yml`. Replace both `GATE_SHA` with a commit of this repo, list the repo's CI workflow names under `workflow_run`, and its check names in `required-checks`.
+2. Turn on Codex code review and automatic reviews for the repo in Codex settings.
+3. Add the section in `CODE-REVIEW-RULES.md` to the repo's `AGENTS.md`.
 4. Start with `merge: false` (report only). Flip to `merge: true` where autonomous landing is ruled.
+
+Every trigger runs the caller from the default branch. Review events go through `pr-gate-poke`, which holds no permissions, and come back as `workflow_run`.
 
 ## Known limits
 
-- A PR that edits `.github/workflows/` runs its own workflows, so it could post a check named like this one. The gate blocks such PRs unless Frank labels them `frank-approved`, but only an org ruleset that requires this workflow from this repo removes the gap.
-- If this check is made a required status check, the in-job merge will be refused (the check is still running). Use GitHub auto-merge with the required check instead.
+- Without branch protection nothing stops someone merging around the gate; the private repos on the free plan cannot have it. The gate is the merge path agents are told to use, not a lock.
+- Between the final decision and the merge call a few milliseconds remain in which a review could be dismissed. Only a required status check under branch protection closes that.
+- A same-repo PR's own workflows run with the repo token. The gate refuses to merge any PR that edits workflows, but cannot stop such a PR from posting a same-named check on itself.
 - A squash merge made with the workflow token does not trigger push workflows on the base branch. Vercel's git integration still deploys.
 
 Tests: `node --test pr-gate/decide.test.mjs`.

@@ -19,6 +19,10 @@ on:
         required: false
         type: string
         default: main
+      required-checks:
+        description: Comma-separated check run names that must pass on the head commit, e.g. "test, build".
+        required: true
+        type: string
       wait-minutes:
         description: How long to wait for running CI when it is the only thing outstanding.
         required: false
@@ -53,4 +57,5 @@ jobs:
           PR_NUMBER: ${{ inputs.pr-number }}
           PR_GATE_MERGE: ${{ inputs.merge }}
           PR_GATE_WAIT_MINUTES: ${{ inputs.wait-minutes }}
+          PR_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}
         run: node .pr-gate/pr-gate/run.mjs

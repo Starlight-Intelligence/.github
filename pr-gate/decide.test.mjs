@@ -4,26 +4,28 @@ import { decide, harnessOfBranch, shaMatches, protectedReasons, ciState } from '
 
 const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const codexBot = { login: 'chatgpt-codex-connector[bot]', type: 'Bot' };
+const claudeBot = { login: 'claude[bot]', type: 'Bot' };
 const human = { login: 'frankxai', type: 'User' };
-const greenCI = [{ name: 'Build', status: 'completed', conclusion: 'success' }];
+const greenCI = [{ name: 'test', status: 'completed', conclusion: 'success' }];
+const cleanReview = { user: codexBot, commitId: HEAD, state: 'COMMENTED', body: "Codex Review: Didn't find any major issues." };
 
 const base = (over = {}) => ({
   headRef: 'agent/claude/thing',
   headSha: HEAD,
-  headCommittedAt: '2026-10-27T03:00:00Z',
   draft: false,
   state: 'open',
   body: 'Serves #12',
   labels: [],
   files: [{ filename: 'src/lib/x.ts', status: 'modified' }],
   comments: [],
-  reviews: [{ user: codexBot, commitId: HEAD, state: 'COMMENTED' }],
+  reviews: [cleanReview],
   checkRuns: greenCI,
+  requiredChecks: ['test'],
   unresolvedThreads: 0,
   ...over,
 });
 
-test('clean Claude PR reviewed by the Codex bot on head passes', () => {
+test('clean Claude PR with a clean Codex bot review on head passes', () => {
   const d = decide(base());
   assert.equal(d.ok, true, JSON.stringify(d));
   assert.deepEqual(d.signers, ['codex']);
@@ -36,67 +38,80 @@ test('author cannot be the checker', () => {
 });
 
 test('a review of an older commit does not count', () => {
-  const d = decide(base({ reviews: [{ user: codexBot, commitId: 'ffffffffffffffffffffffffffffffffffffffff', state: 'COMMENTED' }] }));
+  const d = decide(base({ reviews: [{ ...cleanReview, commitId: 'ffffffffffffffffffffffffffffffffffffffff' }] }));
   assert.equal(d.ok, false);
   assert.match(d.waiting.join(), /older commit/);
 });
 
-test('a human-account comment claiming to be Codex signs nothing', () => {
-  const d = decide(base({ reviews: [], comments: [{ user: human, body: "Codex Review: Didn't find any major issues.", createdAt: '2026-10-27T04:00:00Z' }] }));
-  assert.equal(d.ok, false);
+// Codex review of b526896 reproduced these three as false passes.
+test('typed sign-off lines are unauthenticated and never pass, even with the right sha', () => {
+  for (const body of [`starlight-signoff: harness=claude verdict=pass sha=${HEAD}`, `Checker: claude-cloud · head ${HEAD} · verdict PASS`]) {
+    const d = decide(base({ headRef: 'codex/x', reviews: [], comments: [{ user: human, body }] }));
+    assert.equal(d.ok, false, body);
+    assert.ok(d.advisory.length > 0, 'still reported as advisory');
+  }
 });
 
-test('Codex bot clean comment counts only when posted after the head commit', () => {
-  const after = decide(base({ reviews: [], comments: [{ user: codexBot, body: "Codex Review: Didn't find any major issues.", createdAt: '2026-10-27T04:00:00Z' }] }));
-  assert.equal(after.ok, true, JSON.stringify(after));
-  const before = decide(base({ reviews: [], comments: [{ user: codexBot, body: "Codex Review: Didn't find any major issues.", createdAt: '2026-10-27T02:00:00Z' }] }));
-  assert.equal(before.ok, false);
+test('dismissed and pending bot reviews do not count', () => {
+  for (const state of ['DISMISSED', 'PENDING']) assert.equal(decide(base({ reviews: [{ ...cleanReview, state }] })).ok, false, state);
 });
 
-test('Claude checker line signs a Codex PR on the exact head', () => {
-  const d = decide(base({ headRef: 'codex/x', reviews: [], comments: [{ user: human, body: `Checker: claude-cloud · head ${HEAD} · verdict PASS\n\nfindings...`, createdAt: '2026-10-27T04:00:00Z' }] }));
+test('a bot review that is neither approval nor clean is not a pass; P0/P1 text blocks', () => {
+  assert.equal(decide(base({ reviews: [{ user: codexBot, commitId: HEAD, state: 'COMMENTED', body: 'Critical security issue' }] })).ok, false);
+  const d = decide(base({ reviews: [{ user: codexBot, commitId: HEAD, state: 'COMMENTED', body: '![P1 Badge] token leaks' }] }));
+  assert.match(d.reasons.join(), /blocked on this commit by codex/);
+});
+
+test('a human account or a look-alike bot claiming to be Codex signs nothing', () => {
+  assert.equal(decide(base({ reviews: [{ ...cleanReview, user: human }] })).ok, false);
+  assert.equal(decide(base({ reviews: [{ ...cleanReview, user: { login: 'my-codex-helper[bot]', type: 'Bot' } }] })).ok, false);
+});
+
+test('a bot clean comment counts only when it names the head commit', () => {
+  const named = decide(base({ reviews: [], comments: [{ user: codexBot, body: `Didn't find any major issues. Reviewed ${HEAD.slice(0, 10)}` }] }));
+  assert.equal(named.ok, true, JSON.stringify(named));
+  const unnamed = decide(base({ reviews: [], comments: [{ user: codexBot, body: "Didn't find any major issues." }] }));
+  assert.equal(unnamed.ok, false);
+});
+
+test('Claude bot approval signs a Codex PR on the exact head', () => {
+  const d = decide(base({ headRef: 'codex/x', reviews: [{ user: claudeBot, commitId: HEAD, state: 'APPROVED', body: '' }] }));
   assert.equal(d.ok, true, JSON.stringify(d));
-  assert.deepEqual(d.signers, ['claude']);
-});
-
-test('estate pr-gate marker lines are honoured, short shas are not', () => {
-  const ok = decide(base({ reviews: [], comments: [{ user: human, body: `starlight-signoff: harness=codex verdict=pass sha=${HEAD.slice(0, 12)}` }] }));
-  assert.equal(ok.ok, true);
   assert.equal(shaMatches(HEAD, 'a1b2'), false);
 });
 
-test('commit statuses never count as CI: no check runs means blocked', () => {
-  const d = decide(base({ checkRuns: [] }));
-  assert.equal(d.ok, false);
-  assert.match(d.reasons.join(), /commit statuses do not count/);
+test('required checks must exist and pass; skipped or unrelated green is not CI', () => {
+  assert.match(decide(base({ checkRuns: [] })).reasons.join(), /never ran/);
+  assert.match(decide(base({ checkRuns: [{ name: 'docs', status: 'completed', conclusion: 'success' }, { name: 'test', status: 'completed', conclusion: 'skipped' }] })).reasons.join(), /did not pass: test \(skipped\)/);
+  assert.match(decide(base({ requiredChecks: [] })).reasons.join(), /no required CI checks/);
 });
 
 test('failing or running CI blocks or waits; the gate ignores its own runs', () => {
   assert.match(decide(base({ checkRuns: [...greenCI, { name: 'Lint', status: 'completed', conclusion: 'failure' }] })).reasons.join(), /CI failing: Lint/);
-  const w = decide(base({ checkRuns: [...greenCI, { name: 'Test', status: 'in_progress', conclusion: null }] }));
+  const w = decide(base({ checkRuns: [...greenCI, { name: 'build', status: 'in_progress', conclusion: null }] }));
   assert.equal(w.pending, true);
-  assert.equal(ciState([...greenCI, { name: 'pr-gate / decide', status: 'completed', conclusion: 'failure' }]).bad.length, 0);
+  assert.equal(ciState([...greenCI, { name: 'pr-gate / decide', status: 'completed', conclusion: 'failure' }], ['test']).bad.length, 0);
 });
 
-test('unresolved threads, drafts, hold labels and missing intent all block', () => {
+test('unresolved threads, incomplete reads, drafts, hold labels and missing intent all block', () => {
   assert.equal(decide(base({ unresolvedThreads: 2 })).ok, false);
+  assert.match(decide(base({ incomplete: 'saw 3000 of 3200 changed files' })).reasons.join(), /could not read/);
   assert.equal(decide(base({ draft: true })).ok, false);
   assert.equal(decide(base({ labels: ['hold'] })).ok, false);
   assert.match(decide(base({ body: 'no link here' })).reasons.join(), /no linked intent/);
 });
 
 test('changes requested by the Codex bot block', () => {
-  const d = decide(base({ reviews: [{ user: codexBot, commitId: HEAD, state: 'CHANGES_REQUESTED' }] }));
+  const d = decide(base({ reviews: [{ user: codexBot, commitId: HEAD, state: 'CHANGES_REQUESTED', body: '' }] }));
   assert.match(d.reasons.join(), /blocked on this commit by codex/);
 });
 
-test("Frank's paths need the frank-approved label", () => {
+test("Frank's paths block and no label overrides them", () => {
   for (const filename of ['.github/workflows/ci.yml', 'package.json', 'app/checkout/route.ts', '.env.production', 'src/middleware.ts', 'vercel.json']) {
-    const d = decide(base({ files: [{ filename, status: 'modified' }] }));
+    const d = decide(base({ files: [{ filename, status: 'modified' }], labels: ['frank-approved'] }));
     assert.equal(d.ok, false, filename);
-    assert.match(d.reasons.join(), /Frank's call/, filename);
+    assert.match(d.reasons.join(), /Frank merges this one/, filename);
   }
-  assert.equal(decide(base({ files: [{ filename: 'package.json', status: 'modified' }], labels: ['frank-approved'] })).ok, true);
 });
 
 test('publishing or deleting a public page is protected; editing one is not', () => {

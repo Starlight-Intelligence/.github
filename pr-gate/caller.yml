@@ -1,14 +1,21 @@
-# Copy to .github/workflows/pr-gate.yml in a product repo. Replace GATE_SHA (both places) with a
-# commit of Starlight-Intelligence/.github, and set merge to true only where autonomous landing is ruled.
+# Copy to .github/workflows/pr-gate.yml in a product repo, with poke.yml beside it.
+# Replace GATE_SHA (both places) with a commit of Starlight-Intelligence/.github, list the repo's CI
+# workflow names under workflow_run and its check names in required-checks, and set merge to true
+# only where autonomous landing is ruled.
+#
+# Every trigger here runs this file from the default branch, never from the PR, so a PR cannot
+# rewrite the gate it is judged by. Reviews arrive through pr-gate-poke (no permissions) and come
+# back here as workflow_run.
 name: pr-gate
 
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, edited]
-  pull_request_review:
-    types: [submitted, dismissed]
   issue_comment:
     types: [created]
+  workflow_run:
+    workflows: [pr-gate-poke, CI]
+    types: [completed]
 
 permissions:
   contents: write
@@ -17,22 +24,21 @@ permissions:
   checks: read
 
 concurrency:
-  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number }}
   cancel-in-progress: true
 
 jobs:
   pr-gate:
-    # Comments only re-run the gate when they could change the answer: a sign-off, a checker line,
-    # a bot review result, or an explicit /gate.
+    # Comments re-run the gate only for a bot result or a /gate from someone with write access.
     if: >-
-      github.event_name != 'issue_comment' || (
-        github.event.issue.pull_request && (
-          contains(github.event.comment.body, '/gate') ||
-          contains(github.event.comment.body, 'starlight-signoff') ||
-          contains(github.event.comment.body, 'Checker:') ||
-          github.event.comment.user.type == 'Bot'))
+      (github.event_name == 'pull_request_target') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && (
+        github.event.comment.user.type == 'Bot' ||
+        (contains(github.event.comment.body, '/gate') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))))
     uses: Starlight-Intelligence/.github/.github/workflows/pr-gate.yml@GATE_SHA
     with:
-      pr-number: ${{ github.event.pull_request.number || github.event.issue.number }}
+      pr-number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number }}
+      required-checks: test
       merge: false
       gate-ref: GATE_SHA

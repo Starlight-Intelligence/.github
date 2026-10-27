@@ -10,6 +10,7 @@ const number = Number(process.env.PR_NUMBER);
 const merge = process.env.PR_GATE_MERGE === 'true';
 const waitMinutes = Number(process.env.PR_GATE_WAIT_MINUTES || 8);
 const selfPrefix = (process.env.PR_GATE_SELF_PREFIX || 'pr-gate').toLowerCase();
+const requiredChecks = String(process.env.PR_GATE_REQUIRED_CHECKS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const STICKY = '<!-- starlight-pr-gate -->';
 
 if (!token || !repo || !number) { console.error('GITHUB_TOKEN, GITHUB_REPOSITORY and PR_NUMBER are required'); process.exit(2); }
@@ -34,36 +35,50 @@ async function all(path) {
   }
   return out;
 }
+// Every page, and a GraphQL error is a failure: a missing answer must never read as zero threads.
 async function unresolvedThreads() {
-  const q = `query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100){nodes{isResolved}}}}}`;
-  const r = await api('/graphql', { method: 'POST', body: JSON.stringify({ query: q, variables: { o: owner, n: name, p: number } }) });
-  return (r.data?.repository?.pullRequest?.reviewThreads?.nodes || []).filter((t) => !t.isResolved).length;
+  const q = `query($o:String!,$n:String!,$p:Int!,$c:String){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100,after:$c){nodes{isResolved}pageInfo{hasNextPage endCursor}}}}}`;
+  let count = 0;
+  let cursor = null;
+  for (let i = 0; i < 50; i++) {
+    const r = await api('/graphql', { method: 'POST', body: JSON.stringify({ query: q, variables: { o: owner, n: name, p: number, c: cursor } }) });
+    const t = r.data?.repository?.pullRequest?.reviewThreads;
+    if (r.errors?.length || !t) throw new Error(`review threads unreadable: ${JSON.stringify(r.errors || 'no data').slice(0, 300)}`);
+    count += t.nodes.filter((n) => !n.isResolved).length;
+    if (!t.pageInfo.hasNextPage) return count;
+    cursor = t.pageInfo.endCursor;
+  }
+  throw new Error('review threads exceed 5,000');
 }
 
 async function facts() {
   const pr = await api(`/repos/${repo}/pulls/${number}`);
   const head = pr.head.sha;
-  const [files, comments, reviews, checkRuns, commit, threads] = await Promise.all([
+  const [files, comments, reviews, checkRuns, threads] = await Promise.all([
     all(`/repos/${repo}/pulls/${number}/files`),
     all(`/repos/${repo}/issues/${number}/comments`),
     all(`/repos/${repo}/pulls/${number}/reviews`),
-    all(`/repos/${repo}/commits/${head}/check-runs`),
-    api(`/repos/${repo}/commits/${head}`),
+    // filter=latest: only the newest attempt of each check counts, so a rerun that failed wins
+    // over an older success.
+    all(`/repos/${repo}/commits/${head}/check-runs?filter=latest`),
     unresolvedThreads(),
   ]);
+  // The files endpoint stops at 3,000; a protected path past that point must not go unseen.
+  const incomplete = files.length < pr.changed_files ? `saw ${files.length} of ${pr.changed_files} changed files` : '';
   return {
     pr,
     f: {
       headRef: pr.head.ref,
       headSha: head,
-      headCommittedAt: commit.commit.committer.date,
+      incomplete,
+      requiredChecks,
       draft: pr.draft,
       state: pr.state,
       body: pr.body || '',
       labels: pr.labels.map((l) => l.name),
       files: files.map((x) => ({ filename: x.filename, status: x.status })),
       comments: comments.filter((c) => !String(c.body || '').includes(STICKY)).map((c) => ({ body: c.body, user: c.user, createdAt: c.created_at })),
-      reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state })),
+      reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body })),
       checkRuns: checkRuns.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion })),
       unresolvedThreads: threads,
       selfPrefix,
@@ -84,6 +99,13 @@ while (d.pending && d.waiting.every((w) => w.startsWith('CI still running')) && 
 
 let merged = null;
 if (d.ok && merge) {
+  // Decide again from fresh facts immediately before merging, so a dismissal, hold label or failed
+  // rerun during the wait is seen. The window that remains is milliseconds, not minutes; only a
+  // required check under branch protection closes it fully.
+  ({ pr, f } = await facts());
+  d = decide(f);
+}
+if (d.ok && merge) {
   try {
     // `sha` makes the merge refuse if the head moved after the decision was made.
     const r = await api(`/repos/${repo}/pulls/${number}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash', sha: d.head }) });
@@ -98,12 +120,13 @@ const verdict = merged ? 'MERGED' : d.ok ? 'PASS' : d.pending ? 'WAITING' : 'BLO
 const lines = [
   STICKY,
   `**pr-gate: ${verdict}** on \`${d.head.slice(0, 7)}\` · author harness \`${d.author}\`${d.signers.length ? ` · reviewed by ${d.signers.join(', ')}` : ''}`,
+  d.advisory.length ? `- typed sign-off from ${d.advisory.join(', ')} noted; typed lines are unauthenticated and do not count here (use the estate pr-gate for a human-run merge)` : '',
   ...d.reasons.map((r) => `- blocked: ${r}`),
   ...d.waiting.map((w) => `- waiting: ${w}`),
   merged ? `- squash-merged as \`${merged.slice(0, 7)}\`` : '',
   d.ok && !merge ? '- this repo runs the gate in report-only mode; merge through `pr-gate merge`' : '',
   '',
-  '_Re-evaluates on push, review, comment and label. Comment `/gate` to re-run. A new push invalidates every review._',
+  '_Re-evaluates on push, bot review, bot comment, label and CI completion. Comment `/gate` to re-run. A new push invalidates every review._',
 ].filter(Boolean);
 const body = lines.join('\n');
 
