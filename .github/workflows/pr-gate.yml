@@ -7,8 +7,15 @@ on:
   workflow_call:
     inputs:
       pr-number:
-        required: true
-        type: number
+        description: PR to judge. Empty when a relayed review arrived without one; head-sha is used then.
+        required: false
+        type: string
+        default: ''
+      head-sha:
+        description: Head commit, used to find the PR when pr-number is empty.
+        required: false
+        type: string
+        default: ''
       merge:
         description: Squash-merge when every condition passes. False = report only.
         required: false
@@ -55,6 +62,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr-number }}
+          PR_HEAD_SHA: ${{ inputs.head-sha }}
           PR_GATE_MERGE: ${{ inputs.merge }}
           PR_GATE_WAIT_MINUTES: ${{ inputs.wait-minutes }}
           PR_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}

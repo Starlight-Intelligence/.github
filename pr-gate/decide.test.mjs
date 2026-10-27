@@ -67,11 +67,20 @@ test('a human account or a look-alike bot claiming to be Codex signs nothing', (
   assert.equal(decide(base({ reviews: [{ ...cleanReview, user: { login: 'my-codex-helper[bot]', type: 'Bot' } }] })).ok, false);
 });
 
-test('a bot clean comment counts only when it names the head commit', () => {
-  const named = decide(base({ reviews: [], comments: [{ user: codexBot, body: `Didn't find any major issues. Reviewed ${HEAD.slice(0, 10)}` }] }));
-  assert.equal(named.ok, true, JSON.stringify(named));
-  const unnamed = decide(base({ reviews: [], comments: [{ user: codexBot, body: "Didn't find any major issues." }] }));
-  assert.equal(unnamed.ok, false);
+// Codex review of 1404c37 reproduced the next two as false passes.
+test('bot comments never sign off; a P0/P1 bot comment on the head blocks', () => {
+  const clean = decide(base({ reviews: [], comments: [{ user: codexBot, body: `Didn't find any major issues. Reviewed ${HEAD.slice(0, 10)}` }] }));
+  assert.equal(clean.ok, false);
+  const mixed = decide(base({ comments: [{ user: codexBot, body: `Didnt find any major issues on ${HEAD.slice(0, 7)}. P1: auth bypass remains.` }] }));
+  assert.match(mixed.reasons.join(), /blocked on this commit by codex/);
+  assert.equal(decide(base({ reviews: [{ user: codexBot, commitId: HEAD, state: 'COMMENTED', body: 'p1 regression' }] })).ok, false);
+});
+
+test('renames are judged on both ends', () => {
+  assert.ok(protectedReasons([{ filename: 'docs/old-ci.yml', previousFilename: '.github/workflows/ci.yml', status: 'renamed' }]).length > 0);
+  const page = protectedReasons([{ filename: 'app/new/page.tsx', previousFilename: 'app/about/page.tsx', status: 'renamed' }]);
+  assert.equal(page.length, 2);
+  assert.equal(decide(base({ files: [{ filename: 'app/new/page.tsx', previousFilename: 'app/about/page.tsx', status: 'renamed' }] })).ok, false);
 });
 
 test('Claude bot approval signs a Codex PR on the exact head', () => {

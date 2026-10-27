@@ -24,21 +24,23 @@ permissions:
   checks: read
 
 concurrency:
-  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number }}
+  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
   cancel-in-progress: true
 
 jobs:
   pr-gate:
-    # Comments re-run the gate only for a bot result or a /gate from someone with write access.
+    # Comments re-run the gate only for a result from an allowlisted reviewer bot, or a /gate from
+    # the repo owner. A comment can only trigger a re-read; it never counts as a sign-off.
     if: >-
       (github.event_name == 'pull_request_target') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number) ||
+      (github.event_name == 'workflow_run') ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && (
-        github.event.comment.user.type == 'Bot' ||
-        (contains(github.event.comment.body, '/gate') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))))
+        contains(fromJSON('["chatgpt-codex-connector[bot]","claude[bot]"]'), github.event.comment.user.login) ||
+        (startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association == 'OWNER')))
     uses: Starlight-Intelligence/.github/.github/workflows/pr-gate.yml@GATE_SHA
     with:
-      pr-number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number }}
+      pr-number: ${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || '' }}
+      head-sha: ${{ github.event.workflow_run.head_sha || '' }}
       required-checks: test
       merge: false
       gate-ref: GATE_SHA

@@ -6,14 +6,15 @@ import { decide } from './decide.mjs';
 
 const token = process.env.GITHUB_TOKEN;
 const repo = process.env.GITHUB_REPOSITORY;
-const number = Number(process.env.PR_NUMBER);
+let number = Number(process.env.PR_NUMBER) || 0;
+const relayHead = String(process.env.PR_HEAD_SHA || '').toLowerCase();
 const merge = process.env.PR_GATE_MERGE === 'true';
 const waitMinutes = Number(process.env.PR_GATE_WAIT_MINUTES || 8);
 const selfPrefix = (process.env.PR_GATE_SELF_PREFIX || 'pr-gate').toLowerCase();
 const requiredChecks = String(process.env.PR_GATE_REQUIRED_CHECKS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const STICKY = '<!-- starlight-pr-gate -->';
 
-if (!token || !repo || !number) { console.error('GITHUB_TOKEN, GITHUB_REPOSITORY and PR_NUMBER are required'); process.exit(2); }
+if (!token || !repo || (!number && !relayHead)) { console.error('GITHUB_TOKEN, GITHUB_REPOSITORY and PR_NUMBER or PR_HEAD_SHA are required'); process.exit(2); }
 const [owner, name] = repo.split('/');
 
 async function api(path, init = {}) {
@@ -24,16 +25,29 @@ async function api(path, init = {}) {
   if (!res.ok) throw Object.assign(new Error(`${init.method || 'GET'} ${path} -> ${res.status} ${await res.text()}`), { status: res.status });
   return res.status === 204 ? null : res.json();
 }
+// Fails closed: running out of pages before running out of items is an error, never a short list.
 async function all(path) {
   const out = [];
-  for (let page = 1; page < 50; page++) {
+  for (let page = 1; page <= 50; page++) {
     const sep = path.includes('?') ? '&' : '?';
     const batch = await api(`${path}${sep}per_page=100&page=${page}`);
     const items = Array.isArray(batch) ? batch : batch.check_runs;
     out.push(...items);
-    if (items.length < 100) break;
+    if (items.length < 100) return out;
   }
-  return out;
+  throw new Error(`${path} has more than 5,000 items`);
+}
+
+// A review relayed through workflow_run can arrive without its PR attached. Resolve it from the
+// head commit, accepting only a single open PR in this repo whose head is exactly that commit.
+async function resolveFromHead(sha) {
+  const pulls = await api(`/repos/${repo}/commits/${sha}/pulls`);
+  const hit = pulls.filter((p) => p.state === 'open' && p.head.sha.toLowerCase() === sha && p.head.repo?.full_name === repo);
+  return hit.length === 1 ? hit[0].number : 0;
+}
+if (!number) {
+  number = await resolveFromHead(relayHead);
+  if (!number) { console.log(`no single open PR in ${repo} has head ${relayHead}; nothing to judge`); process.exit(0); }
 }
 // Every page, and a GraphQL error is a failure: a missing answer must never read as zero threads.
 async function unresolvedThreads() {
@@ -76,7 +90,7 @@ async function facts() {
       state: pr.state,
       body: pr.body || '',
       labels: pr.labels.map((l) => l.name),
-      files: files.map((x) => ({ filename: x.filename, status: x.status })),
+      files: files.map((x) => ({ filename: x.filename, status: x.status, previousFilename: x.previous_filename })),
       comments: comments.filter((c) => !String(c.body || '').includes(STICKY)).map((c) => ({ body: c.body, user: c.user, createdAt: c.created_at })),
       reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body })),
       checkRuns: checkRuns.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion })),

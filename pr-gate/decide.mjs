@@ -37,7 +37,7 @@ export function shaMatches(head, given) {
 const MARKER_RE = /^\s*starlight-signoff:\s*harness=(\S+)\s+verdict=(\S+)\s+sha=([0-9a-fA-F]{7,40})\b/i;
 const CHECKER_RE = /^\s*Checker:\s*([a-z0-9_-]+?)(?:-cloud)?\s*[·|-]\s*head\s+([0-9a-fA-F]{7,40})\s*[·|-]\s*verdict\s+(PASS|FAIL|BLOCK)\b/i;
 const CODEX_CLEAN_RE = /didn'?t find any major issues/i;
-const SEVERE_RE = /\bP[01]\b|P[01] Badge/;
+const SEVERE_RE = /\bp[01]\b|p[01] badge/i;
 
 // GitHub's own bot accounts are the only reviewer identity an agent cannot type its way into.
 // Exact logins on purpose: a substring match would accept any app whose name contains "codex".
@@ -58,10 +58,12 @@ export function collectSignoffs({ comments = [], reviews = [], headSha }) {
       m = CHECKER_RE.exec(line);
       if (m) out.push({ harness: m[1].toLowerCase(), verdict: m[3].toLowerCase(), sha: m[2].toLowerCase(), via: 'typed', trusted: false });
     }
-    // A bot comment has no commit id, so it counts only when it names the head commit itself.
+    // Bot comments are not sign-offs: they carry no commit id, and a "no major issues" line can sit
+    // beside a P1 in the same comment. Only commit-bound bot reviews pass. A bot comment that names
+    // a P0/P1 against the head still blocks.
     const h = botHarness(c.user);
-    if (h && CODEX_CLEAN_RE.test(c.body || '') && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
-      out.push({ harness: h, verdict: 'pass', sha: head, via: 'bot-comment', trusted: true });
+    if (h && SEVERE_RE.test(c.body || '') && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
+      out.push({ harness: h, verdict: 'block', sha: head, via: 'bot-comment', trusted: true });
     }
   }
   for (const r of reviews) {
@@ -93,9 +95,15 @@ const PAGE_RE = /(^|\/)(app|pages)\/.*page\.(t|j)sx?$|(^|\/)pages\/(?!api\/).*\.
 export function protectedReasons(files = []) {
   const reasons = new Set();
   for (const f of files) {
-    for (const [re, why] of FRANK_PATHS) if (re.test(f.filename)) reasons.add(`${why} (${f.filename})`);
-    if (PAGE_RE.test(f.filename) && f.status === 'removed') reasons.add(`deletes a public page (${f.filename})`);
-    if (PAGE_RE.test(f.filename) && f.status === 'added') reasons.add(`publishes a new public page (${f.filename})`);
+    // A rename is judged on both ends: moving a protected file out of its path still changes it.
+    for (const name of [f.filename, f.previousFilename].filter(Boolean)) {
+      for (const [re, why] of FRANK_PATHS) if (re.test(name)) reasons.add(`${why} (${name})`);
+    }
+    const renamed = f.status === 'renamed' && f.previousFilename;
+    if (f.status === 'removed' && PAGE_RE.test(f.filename)) reasons.add(`deletes a public page (${f.filename})`);
+    if (f.status === 'added' && PAGE_RE.test(f.filename)) reasons.add(`publishes a new public page (${f.filename})`);
+    if (renamed && PAGE_RE.test(f.previousFilename)) reasons.add(`deletes a public page (${f.previousFilename})`);
+    if (renamed && PAGE_RE.test(f.filename)) reasons.add(`publishes a new public page (${f.filename})`);
   }
   return [...reasons];
 }
@@ -136,7 +144,7 @@ export function decide(f) {
   const held = labels.filter((l) => HOLD_LABELS.includes(l));
   if (held.length) reasons.push(`held by label: ${held.join(', ')}`);
 
-  if (!INTENT_RE.test(f.body || '') && !labels.includes('intent:frank')) {
+  if (!INTENT_RE.test(f.body || '')) {
     reasons.push('no linked intent: reference the issue, board item or ruling this PR serves');
   }
 

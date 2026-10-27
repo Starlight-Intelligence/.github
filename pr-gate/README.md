@@ -3,7 +3,8 @@
 The estate merge gate, running on GitHub instead of a laptop. On the PR's current head commit it passes only when:
 
 - A review from a GitHub bot identity of a different harness than the author exists for that commit: `chatgpt-codex-connector[bot]` (Codex) or `claude[bot]` (Claude). The author is read from the branch prefix, because every harness pushes as the same GitHub account.
-- That review is an approval, or a Codex result saying it found no major issues. Dismissed and pending reviews are ignored; a bot review mentioning P0 or P1 blocks.
+- That review is an approval, or a review whose body says it found no major issues. Dismissed and pending reviews are ignored. A bot review mentioning P0 or P1 blocks, and so does a bot comment that names a P0 or P1 against the head. Bot comments never sign off, because they carry no commit id.
+- A renamed file is judged on both its old and new path.
 - Every check named in the repo's `required-checks` has a latest attempt that succeeded, no other check failed, and nothing is still running. Commit statuses never count: anything holding a token can post one, which is how 20 PRs merged on 2026-10-19 with no check having run.
 - All review threads are resolved (every page read; an unreadable answer blocks) and the full list of changed files was read.
 - It is not a draft, carries no `hold` / `do-not-merge` / `blocked` / `wip` label, and its body links the intent it serves (an issue, board item or ruling).
