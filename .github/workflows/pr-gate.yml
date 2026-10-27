@@ -1,0 +1,62 @@
+name: pr-gate
+
+# Reusable merge gate. Callers install pr-gate/caller.yml and pin this file to a commit SHA.
+# It reads the PR through the API and never checks out or runs the PR's code, which is what makes
+# running it from pull_request_target safe.
+on:
+  workflow_call:
+    inputs:
+      pr-number:
+        description: PR to judge, as a string. Anything that is not a plain number is a no-op.
+        required: true
+        type: string
+      merge:
+        description: Squash-merge when every condition passes. False = report only.
+        required: false
+        type: boolean
+        default: false
+      gate-ref:
+        description: Commit of Starlight-Intelligence/.github to load the gate from. Pin it to the same SHA as the uses line.
+        required: false
+        type: string
+        default: main
+      required-checks:
+        description: Comma-separated check run names that must pass on the head commit, e.g. "test, build".
+        required: true
+        type: string
+      wait-minutes:
+        description: How long to wait for running CI when it is the only thing outstanding.
+        required: false
+        type: number
+        default: 8
+
+jobs:
+  decide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
+    steps:
+      - name: Load the gate
+        uses: actions/checkout@v4
+        with:
+          repository: Starlight-Intelligence/.github
+          ref: ${{ inputs.gate-ref }}
+          path: .pr-gate
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Decide
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_GATE_MERGE: ${{ inputs.merge }}
+          PR_GATE_WAIT_MINUTES: ${{ inputs.wait-minutes }}
+          PR_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}
+        run: node .pr-gate/pr-gate/run.mjs

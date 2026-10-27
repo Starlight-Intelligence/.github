@@ -1,0 +1,23 @@
+name: pr-gate tests
+
+on:
+  pull_request:
+    paths: ['pr-gate/**', '.github/workflows/pr-gate*.yml']
+  push:
+    branches: [main]
+    paths: ['pr-gate/**', '.github/workflows/pr-gate*.yml']
+
+concurrency:
+  group: pr-gate-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test pr-gate/decide.test.mjs
