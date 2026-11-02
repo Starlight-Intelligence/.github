@@ -15,7 +15,7 @@ Decision date: 2026-11-02. **Target state: one active public Starlight organizat
 
 | Repository/domain | Canonical target | Migration notes |
 | --- | --- | --- |
-| `Starlight-Intelligence-System` / SIP reference | `Starlight-Intelligence/Starlight-Intelligence-System` | Transfer original from `frankxai` only after SI/SIS duplicate-name conflict and operational gates are resolved |
+| `Starlight-Intelligence-System` / SIP reference | `Starlight-Intelligence/Starlight-Intelligence-System` | No same-name repository currently appears in **SI**; the SIS org's same-name mirror is a separate owner and does not itself block transfer. Verify target name remains available and pass operational gates before moving the original from `frankxai` |
 | `starlight-agent-skills`, `starlight-evals`, `starlight-voice`, `starlight-design-intelligence`, `starlight-technology` | Existing SI repositories | Verify mirror/origin provenance, publish status, badges, contributor routes |
 | `starlight-swarm`, `starlight-knowledge-tree`, `starlight-cosmos-engine`, `starlight-research-hub` | SI | Promote authoritative origin after comparison; do not simply transfer a stale replica |
 | `starlight-memory-vault` | Private SI, only if safe and needed | No publicization, secrets, private memory, or raw personal data migration |
@@ -28,7 +28,7 @@ Decision date: 2026-11-02. **Target state: one active public Starlight organizat
 
 1. Inspect active source, default branches, open PRs/issues, origin/mirror references, tags/releases, branch rules, GitHub App installations, Actions budgets, packages, deployment hooks, webhooks, environments, and public/private boundaries.
 2. Identify **one source of truth** per component, including any synchronized mirror and downstream package consumers; stop unsafe write synchronization only after the authoritative branch is established.
-3. Resolve same-name collision **without deleting a unique repo or destroying its issue/PR history**. Preserve historical content in an archived, clearly titled repository or other reviewed destination as appropriate.
+3. Confirm target-name availability at transfer time. The existing same-name repo in the **SIS** org is not a target-SI collision; compare and retain its unique history before demoting the mirror. Never delete unique issues, PRs or commits as a transfer shortcut.
 4. Transfer the original repo through approved GitHub ownership controls. Validate redirect URLs, branch and checkout, stars/forks, issues, CODEOWNERS, status checks, deployment targets, npm/package publishing, Actions permissions, and documentation links.
 5. Update first-party references to the new canonical URL; keep redirect compatibility for third-party links. Never recreate a repo at the old path while redirects matter.
 6. Archive/demote redundant mirrors only after comparison, backfill or explicit divergence records, and independently validated consumer health.
