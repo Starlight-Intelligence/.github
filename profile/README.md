@@ -1,5 +1,11 @@
 # Starlight Intelligence
 
+**One public home for the Starlight open ecosystem.** Build sovereign AI systems from modular protocol, memory, skills, evals, voice and orchestration components. Adopt the whole stack or just the interfaces you need.
+
+**Start here:** [Join the community](../COMMUNITY.md) · [Contribute](../CONTRIBUTING.md) · [Organization map & consolidation](../docs/ORGANIZATION-MAP.md) · [Community operations](../docs/COMMUNITY-OPERATIONS.md)
+
+> **November 2026 ownership direction:** `Starlight-Intelligence` becomes the single canonical Starlight GitHub organization. **SIP** is the protocol; **SIS** is its reference implementation. The existing `Starlight-Intelligence-Systems` organization and original repositories under `frankxai` are still active during migration—please follow each repo's declared source of truth rather than opening duplicate PRs.
+
 Personal AI command center, memory engine, voice runtime, and cross-harness agent operating layer.
 
 **Website:** [starlightintelligence.ai](https://starlightintelligence.ai) Â· **Ecosystem:** [Starlight Intelligence](https://github.com/Starlight-Intelligence) Â· [Starlight Systems](https://github.com/Starlight-Intelligence-Systems) Â· [Arcanea Labs](https://github.com/Arcanea-Labs) Â· [GenCreator](https://github.com/GenCreator-ai) Â· [FrankX](https://github.com/FrankX-AI)
@@ -33,6 +39,8 @@ flowchart LR
 | [**starlight-technology**](https://github.com/Starlight-Intelligence/starlight-technology) | Hardware sizing, local inference benchmarks, and workstation architecture guides. | [Website](https://starlightintelligence.ai) |
 
 ## Quickstart
+
+The commands below are documented entry points, not a verified clean-machine install report. When following them, please [report reproducible installation problems](../COMMUNITY.md) so the onboarding can be independently tested.
 
 ```bash
 # Install portable Starlight substrate skills
