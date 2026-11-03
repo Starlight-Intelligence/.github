@@ -26,17 +26,15 @@ export function harnessOfBranch(branch) {
   return 'unlabeled';
 }
 
-// Under 7 hex chars a "sha" is a typo or a forgery and must never match a future head.
+// Prefixes are useful display labels, never exact-revision evidence.
 export function shaMatches(head, given) {
   const h = String(head || '').toLowerCase();
   const g = String(given || '').toLowerCase();
-  if (!/^[0-9a-f]{7,40}$/.test(h) || !/^[0-9a-f]{7,40}$/.test(g)) return false;
-  return g.length <= h.length ? h.startsWith(g) : g.startsWith(h);
+  return /^[0-9a-f]{40}$/.test(h) && /^[0-9a-f]{40}$/.test(g) && h === g;
 }
 
 const MARKER_RE = /^\s*starlight-signoff:\s*harness=(\S+)\s+verdict=(\S+)\s+sha=([0-9a-fA-F]{7,40})\b/i;
 const CHECKER_RE = /^\s*Checker:\s*([a-z0-9_-]+?)(?:-cloud)?\s*[·|-]\s*head\s+([0-9a-fA-F]{7,40})\s*[·|-]\s*verdict\s+(PASS|FAIL|BLOCK)\b/i;
-const CODEX_CLEAN_RE = /didn'?t find any major issues/i;
 const SEVERE_RE = /\bp[01]\b|p[01] badge/i;
 
 // GitHub's own bot accounts are the only reviewer identity an agent cannot type its way into.
@@ -72,7 +70,7 @@ export function collectSignoffs({ comments = [], reviews = [], headSha }) {
     const body = String(r.body || '');
     let verdict = null;
     if (r.state === 'CHANGES_REQUESTED' || SEVERE_RE.test(body)) verdict = 'block';
-    else if (r.state === 'APPROVED' || CODEX_CLEAN_RE.test(body)) verdict = 'pass';
+    else if (r.state === 'APPROVED') verdict = 'pass';
     // A COMMENTED review that neither approves nor says it is clean is not a verdict either way;
     // its inline findings surface as unresolved threads.
     if (verdict) out.push({ harness: h, verdict, sha: String(r.commitId || '').toLowerCase(), via: 'bot-review', trusted: true });
@@ -111,18 +109,40 @@ export function protectedReasons(files = []) {
 // CI counts only as check runs. Commit statuses are excluded on purpose: anything holding a token
 // can post `state=success`, which is how 20 PRs merged on 2026-10-19 with no check having run.
 // Each repo names the checks that must pass; one unrelated green check is not CI.
-export function ciState(checkRuns = [], required = [], selfPrefix = 'pr-gate') {
-  const runs = checkRuns.filter((r) => !String(r.name || '').toLowerCase().startsWith(selfPrefix));
+export function ciState(checkRuns = [], required = [], selfPrefix = 'pr-gate', headSha) {
+  const candidates = checkRuns.filter((r) => !r.superseded && !String(r.name || '').toLowerCase().startsWith(selfPrefix));
+  // Re-runs may leave several attempts in the API. Retain the newest run and
+  // attempt per workflow/app/name; never let API ordering choose an old success.
+  const groups = new Map();
+  for (const r of candidates) {
+    const key = JSON.stringify([r.appId, r.workflowPath, r.name]);
+    const group = groups.get(key) || [];
+    group.push(r); groups.set(key, group);
+  }
+  const runs = [...groups.values()].flatMap(group => {
+    const latestRun = Math.max(...group.map(r => r.runId || 0));
+    const latestAttempt = Math.max(...group.filter(r => (r.runId || 0) === latestRun).map(r => r.runAttempt || 0));
+    return group.filter(r => (r.runId || 0) === latestRun && (r.runAttempt || 0) === latestAttempt);
+  });
   const bad = runs.filter((r) => r.status === 'completed' && ['failure', 'cancelled', 'timed_out', 'action_required', 'stale', 'startup_failure'].includes(r.conclusion));
   const pending = runs.filter((r) => r.status !== 'completed');
   const missing = [];
   const notPassed = [];
-  for (const name of required) {
-    const r = runs.find((x) => x.name === name);
+  const invalid = [];
+  for (const spec of required) {
+    const name = typeof spec === 'string' ? spec : spec?.name;
+    const named = runs.filter(x => x.name === name);
+    if (!named.length) { missing.push(name); continue; }
+    if (!spec || typeof spec !== 'object' || spec.appId !== 15368 || !/^\.github\/workflows\/[^/]+\.ya?ml$/.test(spec.workflowPath || '')) {
+      invalid.push(`${name}: app and workflow provenance must be configured`); continue;
+    }
+    const matches = named.filter(r => r.appId === spec.appId && r.workflowPath === spec.workflowPath && shaMatches(headSha, r.headSha) && Number.isSafeInteger(r.runId) && r.runId > 0 && Number.isSafeInteger(r.runAttempt) && r.runAttempt > 0);
+    if (matches.length !== 1 || named.length !== 1) { invalid.push(`${name}: missing, ambiguous or untrusted check origin/revision`); continue; }
+    const r = matches[0];
     if (!r) missing.push(name);
     else if (r.status === 'completed' && r.conclusion !== 'success') notPassed.push(`${name} (${r.conclusion})`);
   }
-  return { bad, pending, missing, notPassed };
+  return { bad, pending, missing, notPassed, invalid };
 }
 
 const HOLD_LABELS = ['hold', 'do-not-merge', 'blocked', 'wip'];
@@ -138,6 +158,12 @@ export function decide(f) {
 
   const reasons = [];
   const waiting = [];
+  if (!/^[0-9a-f]{40}$/.test(head)) reasons.push('full head SHA unavailable');
+  // All harnesses use the same human GitHub account. A branch prefix is
+  // caller-controlled and the reviewer bot does not attest who implemented the
+  // change. Until a trusted maker attestation exists, this gate cannot certify
+  // provider independence, even when all observable checks/reviews are clean.
+  waiting.push('provider independence unverified: no authenticated implementation-provider attestation');
 
   if (f.state && f.state !== 'open') reasons.push(`PR is ${f.state}`);
   if (f.draft) reasons.push('PR is a draft');
@@ -148,7 +174,7 @@ export function decide(f) {
     reasons.push('no linked intent: reference the issue, board item or ruling this PR serves');
   }
 
-  const blocks = signoffs.filter((s) => (s.verdict === 'block' || s.verdict === 'fail') && onHead(s) && s.harness !== author);
+  const blocks = signoffs.filter((s) => (s.verdict === 'block' || s.verdict === 'fail') && onHead(s));
   const valid = signoffs.filter((s) => s.verdict === 'pass' && onHead(s) && s.harness !== author);
   if (blocks.length) reasons.push(`blocked on this commit by ${[...new Set(blocks.map((b) => b.harness))].join(', ')}`);
   if (!valid.length) {
@@ -158,15 +184,17 @@ export function decide(f) {
   }
 
   if (f.incomplete) reasons.push(`could not read the whole PR: ${f.incomplete}`);
-  if ((f.unresolvedThreads || 0) > 0) reasons.push(`${f.unresolvedThreads} unresolved review thread(s)`);
+  if (!Number.isSafeInteger(f.unresolvedThreads) || f.unresolvedThreads < 0) reasons.push('review-thread data unavailable');
+  else if (f.unresolvedThreads > 0) reasons.push(`${f.unresolvedThreads} unresolved review thread(s)`);
 
   const required = f.requiredChecks || [];
-  const ci = ciState(f.checkRuns, required, f.selfPrefix);
+  const ci = ciState(f.checkRuns, required, f.selfPrefix, head);
   if (!required.length) reasons.push('no required CI checks are configured for this repo');
   if (ci.bad.length) reasons.push(`CI failing: ${ci.bad.map((r) => r.name).join(', ')}`);
   if (ci.notPassed.length) reasons.push(`required check did not pass: ${ci.notPassed.join(', ')}`);
+  if (ci.invalid.length) reasons.push(`required check provenance invalid: ${ci.invalid.join(', ')}`);
   if (ci.pending.length) waiting.push(`CI still running: ${ci.pending.map((r) => r.name).join(', ')}`);
-  else if (ci.missing.length) reasons.push(`required check never ran on this commit: ${ci.missing.join(', ')} (commit statuses do not count)`);
+  if (ci.missing.length) reasons.push(`required check never ran on this commit: ${ci.missing.join(', ')} (commit statuses do not count)`);
 
   // No label can override this: every harness acts as the same account, so a label proves nothing
   // about who applied it. Protected changes are merged by Frank, outside this gate.

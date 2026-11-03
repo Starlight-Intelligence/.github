@@ -1,143 +1,138 @@
-// run.mjs: fetch the facts for one PR, decide, report, and merge on a clean pass.
-// No dependencies: Node 20+ fetch against the GitHub API with the workflow's GITHUB_TOKEN.
-// It never checks out or executes the PR's code.
+// Trusted default-branch report runner. Never checks out or executes PR source.
 import { appendFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { decide } from './decide.mjs';
 
-const token = process.env.GITHUB_TOKEN;
-const repo = process.env.GITHUB_REPOSITORY;
-const rawNumber = String(process.env.PR_NUMBER || '').trim();
-const merge = process.env.PR_GATE_MERGE === 'true';
-const waitMinutes = Number(process.env.PR_GATE_WAIT_MINUTES || 8);
-const selfPrefix = (process.env.PR_GATE_SELF_PREFIX || 'pr-gate').toLowerCase();
-const requiredChecks = String(process.env.PR_GATE_REQUIRED_CHECKS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const STICKY = '<!-- starlight-pr-gate -->';
-
-if (!token || !repo) { console.error('GITHUB_TOKEN and GITHUB_REPOSITORY are required'); process.exit(2); }
-// A CI run with no PR attached passes its own title here; that is not a PR to judge.
-if (!/^[1-9][0-9]{0,8}$/.test(rawNumber)) { console.log(`no PR number in "${rawNumber.slice(0, 80)}"; nothing to judge`); process.exit(0); }
-const number = Number(rawNumber);
-const [owner, name] = repo.split('/');
-
-async function api(path, init = {}) {
-  const res = await fetch(`https://api.github.com${path}`, {
-    ...init,
-    headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', ...(init.headers || {}) },
-  });
-  if (!res.ok) throw Object.assign(new Error(`${init.method || 'GET'} ${path} -> ${res.status} ${await res.text()}`), { status: res.status });
-  return res.status === 204 ? null : res.json();
-}
-// Fails closed: running out of pages before running out of items is an error, never a short list.
-async function all(path) {
-  const out = [];
-  for (let page = 1; page <= 50; page++) {
-    const sep = path.includes('?') ? '&' : '?';
-    const batch = await api(`${path}${sep}per_page=100&page=${page}`);
-    const items = Array.isArray(batch) ? batch : batch.check_runs;
-    out.push(...items);
-    if (items.length < 100) return out;
-  }
-  throw new Error(`${path} has more than 5,000 items`);
-}
-// Every page, and a GraphQL error is a failure: a missing answer must never read as zero threads.
-async function unresolvedThreads() {
-  const q = `query($o:String!,$n:String!,$p:Int!,$c:String){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100,after:$c){nodes{isResolved}pageInfo{hasNextPage endCursor}}}}}`;
-  let count = 0;
-  let cursor = null;
-  for (let i = 0; i < 50; i++) {
-    const r = await api('/graphql', { method: 'POST', body: JSON.stringify({ query: q, variables: { o: owner, n: name, p: number, c: cursor } }) });
-    const t = r.data?.repository?.pullRequest?.reviewThreads;
-    if (r.errors?.length || !t) throw new Error(`review threads unreadable: ${JSON.stringify(r.errors || 'no data').slice(0, 300)}`);
-    count += t.nodes.filter((n) => !n.isResolved).length;
-    if (!t.pageInfo.hasNextPage) return count;
-    cursor = t.pageInfo.endCursor;
-  }
-  throw new Error('review threads exceed 5,000');
-}
-
-async function facts() {
-  const pr = await api(`/repos/${repo}/pulls/${number}`);
-  const head = pr.head.sha;
-  const [files, comments, reviews, checkRuns, threads] = await Promise.all([
-    all(`/repos/${repo}/pulls/${number}/files`),
-    all(`/repos/${repo}/issues/${number}/comments`),
-    all(`/repos/${repo}/pulls/${number}/reviews`),
-    // filter=latest: only the newest attempt of each check counts, so a rerun that failed wins
-    // over an older success.
-    all(`/repos/${repo}/commits/${head}/check-runs?filter=latest`),
-    unresolvedThreads(),
-  ]);
-  // The files endpoint stops at 3,000; a protected path past that point must not go unseen.
-  const incomplete = files.length < pr.changed_files ? `saw ${files.length} of ${pr.changed_files} changed files` : '';
-  return {
-    pr,
-    f: {
-      headRef: pr.head.ref,
-      headSha: head,
-      incomplete,
-      requiredChecks,
-      draft: pr.draft,
-      state: pr.state,
-      body: pr.body || '',
-      labels: pr.labels.map((l) => l.name),
-      files: files.map((x) => ({ filename: x.filename, status: x.status, previousFilename: x.previous_filename })),
-      comments: comments.filter((c) => !String(c.body || '').includes(STICKY)).map((c) => ({ body: c.body, user: c.user, createdAt: c.created_at })),
-      reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body })),
-      checkRuns: checkRuns.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion })),
-      unresolvedThreads: threads,
-      selfPrefix,
-    },
+const ACTIONS_BOT = 'github-actions[bot]';
+export function createClient(token, request = fetch, pause = ms => new Promise(r => setTimeout(r, ms))) {
+  return async function api(path, init = {}) {
+    const method = init.method || 'GET';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const response = await request(`https://api.github.com${path}`, {
+        ...init,
+        headers: { authorization: `Bearer ${token}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (method === 'GET' && [429, 502, 503, 504].includes(response.status) && attempt < 2) { await pause(250 * 2 ** attempt); continue; }
+      // Do not echo private response bodies or retry uncertain writes.
+      if (!response.ok) throw new Error(`${method} ${path} -> HTTP ${response.status}`);
+      return response.status === 204 ? null : response.json();
+    }
   };
 }
 
-// Wait only when CI is the sole thing outstanding, so a PR that is otherwise clean lands in the
-// same run instead of waiting for the next event.
-let { pr, f } = await facts();
-let d = decide(f);
-const deadline = Date.now() + waitMinutes * 60_000;
-while (d.pending && d.waiting.every((w) => w.startsWith('CI still running')) && Date.now() < deadline) {
-  await new Promise((r) => setTimeout(r, 30_000));
-  ({ pr, f } = await facts());
-  d = decide(f);
-}
-
-let merged = null;
-if (d.ok && merge) {
-  // Decide again from fresh facts immediately before merging, so a dismissal, hold label or failed
-  // rerun during the wait is seen. The window that remains is milliseconds, not minutes; only a
-  // required check under branch protection closes it fully.
-  ({ pr, f } = await facts());
-  d = decide(f);
-}
-if (d.ok && merge) {
-  try {
-    // `sha` makes the merge refuse if the head moved after the decision was made.
-    const r = await api(`/repos/${repo}/pulls/${number}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash', sha: d.head }) });
-    merged = r.sha;
-  } catch (e) {
-    d.ok = false;
-    d.reasons.push(`merge refused by GitHub: ${e.message.slice(0, 300)}`);
+export async function all(api, path) {
+  const out = [];
+  for (let page = 1; page <= 50; page++) {
+    const batch = await api(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
+    const items = Array.isArray(batch) ? batch : batch?.check_runs ?? batch?.jobs;
+    if (!Array.isArray(items)) throw new Error('invalid paginated API response');
+    out.push(...items);
+    if (items.length < 100) return out;
   }
+  throw new Error('API pagination exceeded 5,000 items');
 }
 
-const verdict = merged ? 'MERGED' : d.ok ? 'PASS' : d.pending ? 'WAITING' : 'BLOCKED';
-const lines = [
-  STICKY,
-  `**pr-gate: ${verdict}** on \`${d.head.slice(0, 7)}\` · author harness \`${d.author}\`${d.signers.length ? ` · reviewed by ${d.signers.join(', ')}` : ''}`,
-  d.advisory.length ? `- typed sign-off from ${d.advisory.join(', ')} noted; typed lines are unauthenticated and do not count here (use the estate pr-gate for a human-run merge)` : '',
-  ...d.reasons.map((r) => `- blocked: ${r}`),
-  ...d.waiting.map((w) => `- waiting: ${w}`),
-  merged ? `- squash-merged as \`${merged.slice(0, 7)}\`` : '',
-  d.ok && !merge ? '- this repo runs the gate in report-only mode; merge through `pr-gate merge`' : '',
-  '',
-  '_Re-evaluates on push, bot review, bot comment, label and CI completion. Comment `/gate` to re-run. A new push invalidates every review._',
-].filter(Boolean);
-const body = lines.join('\n');
+export async function unresolvedThreads(api, owner, name, number) {
+  const query = 'query($o:String!,$n:String!,$p:Int!,$c:String){repository(owner:$o,name:$n){pullRequest(number:$p){reviewThreads(first:100,after:$c){nodes{isResolved}pageInfo{hasNextPage endCursor}}}}}';
+  let count = 0, cursor = null;
+  for (let page = 0; page < 50; page++) {
+    const r = await api('/graphql', { method: 'POST', body: JSON.stringify({ query, variables: { o: owner, n: name, p: number, c: cursor } }) });
+    const threads = r?.data?.repository?.pullRequest?.reviewThreads;
+    if (r?.errors?.length || !Array.isArray(threads?.nodes) || typeof threads?.pageInfo?.hasNextPage !== 'boolean' || threads.nodes.some(n => typeof n?.isResolved !== 'boolean')) throw new Error('review threads unreadable');
+    count += threads.nodes.filter(n => !n.isResolved).length;
+    if (!threads.pageInfo.hasNextPage) return count;
+    if (!threads.pageInfo.endCursor || threads.pageInfo.endCursor === cursor) throw new Error('review thread cursor did not advance');
+    cursor = threads.pageInfo.endCursor;
+  }
+  throw new Error('review threads exceeded 5,000');
+}
 
-const existing = (await all(`/repos/${repo}/issues/${number}/comments`)).find((c) => String(c.body || '').includes(STICKY));
-if (existing) await api(`/repos/${repo}/issues/comments/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ body }) });
-else await api(`/repos/${repo}/issues/${number}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+export async function facts(api, repo, number, requiredChecks) {
+  const [owner, name] = repo.split('/');
+  const pr = await api(`/repos/${repo}/pulls/${number}`);
+  if (!/^[a-f0-9]{40}$/.test(pr?.head?.sha || '')) throw new Error('full PR head unavailable');
+  const head = pr.head.sha;
+  const [files, comments, reviews, checks, threads] = await Promise.all([
+    all(api, `/repos/${repo}/pulls/${number}/files`),
+    all(api, `/repos/${repo}/issues/${number}/comments`),
+    all(api, `/repos/${repo}/pulls/${number}/reviews`),
+    all(api, `/repos/${repo}/commits/${head}/check-runs?filter=all`),
+    unresolvedThreads(api, owner, name, number),
+  ]);
+  if (checks.length > 300) throw new Error('too many check runs for bounded provenance inspection');
+  const runCache = new Map();
+  const jobCache = new Map();
+  const checkRuns = [];
+  // Only authenticated required contexts can earn CI credit. Never fetch an
+  // untrusted details_url: parse its run ID and use the selected repo's API.
+  for (const c of checks) {
+    let workflowPath, runId, runAttempt, superseded = false;
+    if (requiredChecks.some(s => (typeof s === 'string' ? s : s.name) === c.name) && c.app?.id === 15368) {
+      let url;
+      try { url = new URL(c.details_url); } catch { /* invalid origin stays untrusted */ }
+      const prefix = `/${repo}/actions/runs/`;
+      const match = url?.origin === 'https://github.com' && url.pathname.startsWith(prefix) ? /^(\d+)(?:\/job\/\d+)?$/.exec(url.pathname.slice(prefix.length)) : null;
+      if (match) {
+        const id = Number(match[1]);
+        if (!runCache.has(id)) runCache.set(id, await api(`/repos/${repo}/actions/runs/${id}`));
+        const run = runCache.get(id);
+        if (run.head_sha === head && run.repository?.full_name === repo && run.check_suite_id === c.check_suite?.id) {
+          if (!Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) throw new Error('run attempt unavailable');
+          if (!jobCache.has(id)) jobCache.set(id, await all(api, `/repos/${repo}/actions/runs/${id}/attempts/${run.run_attempt}/jobs`));
+          const jobs = jobCache.get(id);
+          const job = jobs.find(j => j.check_run_url === `https://api.github.com/repos/${repo}/check-runs/${c.id}`);
+          if (job && job.name === c.name) {
+            workflowPath = run.path?.split('@')[0]; runId = run.id; runAttempt = run.run_attempt;
+          } else superseded = true;
+        }
+      }
+    }
+    checkRuns.push({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion, appId: c.app?.id, headSha: c.head_sha, workflowPath, runId, runAttempt, superseded });
+  }
+  return { pr, f: {
+    headRef: pr.head.ref, headSha: head, requiredChecks, draft: pr.draft, state: pr.state,
+    body: pr.body || '', labels: pr.labels.map(l => l.name),
+    incomplete: !Number.isSafeInteger(pr.changed_files) || files.length !== pr.changed_files ? `saw ${files.length} of ${pr.changed_files} changed files` : '',
+    files: files.map(x => ({ filename: x.filename, status: x.status, previousFilename: x.previous_filename })),
+    comments: comments.filter(c => !(c.user?.type === 'Bot' && c.user?.login === ACTIONS_BOT && c.body?.includes(STICKY))),
+    reviews: reviews.map(r => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body })),
+    checkRuns, unresolvedThreads: threads, selfPrefix: 'pr-gate',
+  } };
+}
 
-if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${body}\n`);
-console.log(body);
-process.exit(d.ok ? 0 : 1);
+export async function main(env = process.env, apiOverride) {
+  if (env.PR_GATE_MERGE === 'true') throw new Error('automatic merging disabled: gate qualification and authenticated maker evidence are missing');
+  const repo = env.GITHUB_REPOSITORY;
+  if (!env.GITHUB_TOKEN || !/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw new Error('valid repository and token required');
+  const rawNumber = String(env.PR_NUMBER || '').trim();
+  if (!/^[1-9][0-9]{0,8}$/.test(rawNumber)) { console.log('no valid PR number; no report'); return 0; }
+  const number = Number(rawNumber);
+  const raw = env.PR_GATE_REQUIRED_CHECKS || '';
+  const requiredChecks = raw.startsWith('[') ? JSON.parse(raw) : raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!Array.isArray(requiredChecks) || requiredChecks.some(s => typeof s !== 'string' && (!s || typeof s.name !== 'string'))) throw new Error('invalid required-check policy');
+  const api = apiOverride || createClient(env.GITHUB_TOKEN);
+  const { f } = await facts(api, repo, number, requiredChecks);
+  const d = decide(f);
+  // Do not overwrite a newer report with facts from an older head.
+  const current = await api(`/repos/${repo}/pulls/${number}`);
+  if (current.head?.sha !== f.headSha) throw new Error('head moved while collecting facts; wait for the synchronize event');
+  const body = [STICKY, `**pr-gate report: ${d.reasons.length ? 'BLOCKED' : 'WAITING'}** on \`${d.head}\``,
+    `Branch routing hint: \`${d.author}\`; implementation-provider independence is **unverified**.`,
+    ...d.reasons.map(s => `- blocked: ${s}`), ...d.waiting.map(s => `- waiting: ${s}`),
+    '', 'Report-only. No merge, production approval or independently authenticated maker receipt is supplied by this workflow.',
+  ].join('\n');
+  const comments = await all(api, `/repos/${repo}/issues/${number}/comments`);
+  const own = comments.filter(c => c.user?.type === 'Bot' && c.user?.login === ACTIONS_BOT && c.body?.startsWith(STICKY)).sort((a, b) => b.id - a.id)[0];
+  if (own) await api(`/repos/${repo}/issues/comments/${own.id}`, { method: 'PATCH', body: JSON.stringify({ body }) });
+  else await api(`/repos/${repo}/issues/${number}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+  if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, body + '\n');
+  console.log(body);
+  return 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try { process.exitCode = await main(); }
+  catch (e) { console.error(`pr-gate failed closed: ${e.message}`); process.exitCode = 1; }
+}

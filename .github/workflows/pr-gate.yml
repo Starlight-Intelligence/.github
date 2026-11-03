@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       merge:
-        description: Squash-merge when every condition passes. False = report only.
+        description: Reserved for compatibility. True is refused; this gate is report-only.
         required: false
         type: boolean
         default: false
@@ -19,7 +19,7 @@ on:
         description: Commit of Starlight-Intelligence/.github to load the gate from. Pin it to the same SHA as the uses line.
         required: false
         type: string
-        default: main
+        default: ''
       required-checks:
         description: Comma-separated check run names that must pass on the head commit, e.g. "test, build".
         required: true
@@ -35,11 +35,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       checks: read
+      actions: read
     steps:
+      - name: Require an immutable gate source
+        env:
+          GATE_REF: ${{ inputs.gate-ref }}
+        run: node -e "if (!/^[a-f0-9]{40}$/.test(process.env.GATE_REF || '')) process.exit(1)"
       - name: Load the gate
         uses: actions/checkout@v4
         with:
