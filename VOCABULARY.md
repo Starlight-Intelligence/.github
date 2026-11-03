@@ -36,7 +36,7 @@ One word, one meaning. When a Starlight document, team card or agent instruction
 
 **Isolation.** Where the candidate code ran while it was checked, written on the receipt: as the operator's own user, or in a locked-down container. A receipt never claims more isolation than actually ran. (Article 5)
 
-**Lane.** A claim, with an expiry, that one agent is writing to a stated set of paths, so two agents never overwrite each other.
+**Lane.** An exclusive claim that one agent is writing to a stated set of paths until a stated expiry. A new claim is refused while a live claim overlaps it, and an agent whose claim has expired stops writing until it claims again. Lanes work alongside isolation: each writer still works on its own branch or copy.
 
 **Handover.** The written state an agent leaves when it stops: what is done, what is not, and the next step, so another agent or person can continue without guessing.
 
@@ -46,7 +46,7 @@ One word, one meaning. When a Starlight document, team card or agent instruction
 
 **Quarantine.** Where lessons wait until a person adopts or rejects them. Only adopted lessons reach the next agent. (Article 6)
 
-**`[OPEN]`.** The one way to write a value nobody has measured. Never replaced by a guess. (Article 7)
+**`[OPEN]`.** The one way to write a value that no ruling and no measurement has established. Never replaced by a guess. (Article 7)
 
 **Ruled.** A decision a founder made. Only a founder changes it. (Article 7)
 
@@ -64,7 +64,7 @@ One word, one meaning. When a Starlight document, team card or agent instruction
 
 ## Versions
 
-Terms follow the charter's versioning. A new term is a minor release. Changing what an existing term means is a major release.
+Terms follow the charter's versioning. A new term that creates no new obligation is a minor release. Changing what an existing term means, or adding one that creates an obligation, is a major release.
 
 | Version | Date | Change |
 |---|---|---|
