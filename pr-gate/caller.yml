@@ -25,7 +25,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.display_title }}
+  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -40,9 +40,8 @@ jobs:
         (github.event.comment.body == '/gate' && contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association))))
     uses: Starlight-Intelligence/.github/.github/workflows/pr-gate.yml@GATE_SHA
     with:
-      # Reusable inputs are typed; the number is passed as a string. A relayed review with no PR
-      # attached falls back to the poke run title, which is the PR number.
-      pr-number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.display_title) }}
+      # workflow_run resolves its PR from API-authenticated run/repository/head data.
+      pr-number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number || 0) }}
       required-checks: >-
         [{"name":"test","appId":15368,"workflowPath":".github/workflows/ci.yml"}]
       merge: false

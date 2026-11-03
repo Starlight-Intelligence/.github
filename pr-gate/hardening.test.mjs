@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decide, shaMatches, ciState, collectSignoffs } from './decide.mjs';
+import { decide, shaMatches, ciState, collectSignoffs, protectedReasons } from './decide.mjs';
 const head = 'a'.repeat(40);
 const bot = { login: 'chatgpt-codex-connector[bot]', type: 'Bot', id: 196283668 };
 const check = { id: 2, name: 'test', status: 'completed', conclusion: 'success', appId: 15368, headSha: head, workflowPath: '.github/workflows/ci.yml', runId: 2, runAttempt: 1 };
@@ -40,3 +40,4 @@ test('duplicate check names within the latest attempt fail closed', () => {
   assert.ok(r.invalid?.length);
 });
 test('missing review-thread data never means zero unresolved threads', () => assert.match(decide({ ...facts(), unresolvedThreads: undefined }).reasons.join(), /thread.*unavailable/));
+for (const filename of ['.github/scripts/ci-aggregate.mjs', 'scripts/tests/ci-aggregate.test.mjs']) test(`${filename} cannot change the required-check implementation without the human gate`, () => assert.ok(protectedReasons([{ filename, status: 'modified' }]).length));

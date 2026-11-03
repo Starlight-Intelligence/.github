@@ -25,7 +25,7 @@ on:
         required: true
         type: string
       wait-minutes:
-        description: How long to wait for running CI when it is the only thing outstanding.
+        description: Deprecated compatibility input. Reports are immediate and never poll.
         required: false
         type: number
         default: 8
@@ -44,16 +44,24 @@ jobs:
       - name: Require an immutable gate source
         env:
           GATE_REF: ${{ inputs.gate-ref }}
-        run: node -e "if (!/^[a-f0-9]{40}$/.test(process.env.GATE_REF || '')) process.exit(1)"
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          node <<'NODE'
+          // source-ref-validator:start
+          const e = process.env;
+          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || e.JOB_WORKFLOW_REPOSITORY !== 'Starlight-Intelligence/.github') process.exit(1);
+          // source-ref-validator:end
+          NODE
       - name: Load the gate
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Starlight-Intelligence/.github
           ref: ${{ inputs.gate-ref }}
           path: .pr-gate
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 

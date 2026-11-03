@@ -1,5 +1,5 @@
 // Trusted default-branch report runner. Never checks out or executes PR source.
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { decide } from './decide.mjs';
 
@@ -32,6 +32,25 @@ export async function all(api, path) {
     if (items.length < 100) return out;
   }
   throw new Error('API pagination exceeded 5,000 items');
+}
+
+export async function resolvePrNumber(env, api) {
+  if (env.GITHUB_EVENT_NAME !== 'workflow_run') {
+    const raw = String(env.PR_NUMBER || '').trim();
+    return /^[1-9][0-9]{0,8}$/.test(raw) ? Number(raw) : null;
+  }
+  const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'));
+  const id = event.workflow_run?.id;
+  if (!Number.isSafeInteger(id) || id < 1) throw new Error('workflow run identity unavailable');
+  // The event title, relay output and attached PR array supply no authority.
+  // Re-read the run and resolve current open PRs by its actual repository/head.
+  const run = await api(`/repos/${env.GITHUB_REPOSITORY}/actions/runs/${id}`);
+  const allowed = String(env.PR_GATE_ALLOWED_WORKFLOWS || '.github/workflows/ci.yml,.github/workflows/pr-gate-poke.yml').split(',');
+  if (run.repository?.full_name !== env.GITHUB_REPOSITORY || !/^[a-f0-9]{40}$/.test(run.head_sha || '') || !allowed.includes(run.path?.split('@')[0]) || !['pull_request', 'pull_request_review'].includes(run.event)) throw new Error('untrusted workflow run relay');
+  const prs = await all(api, `/repos/${env.GITHUB_REPOSITORY}/commits/${run.head_sha}/pulls`);
+  const candidates = prs.filter(p => p.state === 'open' && p.head?.sha === run.head_sha && p.head?.repo?.full_name === run.head_repository?.full_name && p.base?.repo?.full_name === env.GITHUB_REPOSITORY);
+  if (candidates.length > 1) throw new Error('workflow head maps to multiple open PRs');
+  return candidates[0]?.number ?? null;
 }
 
 export async function unresolvedThreads(api, owner, name, number) {
@@ -106,13 +125,12 @@ export async function main(env = process.env, apiOverride) {
   if (env.PR_GATE_MERGE === 'true') throw new Error('automatic merging disabled: gate qualification and authenticated maker evidence are missing');
   const repo = env.GITHUB_REPOSITORY;
   if (!env.GITHUB_TOKEN || !/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw new Error('valid repository and token required');
-  const rawNumber = String(env.PR_NUMBER || '').trim();
-  if (!/^[1-9][0-9]{0,8}$/.test(rawNumber)) { console.log('no valid PR number; no report'); return 0; }
-  const number = Number(rawNumber);
+  const api = apiOverride || createClient(env.GITHUB_TOKEN);
+  const number = await resolvePrNumber(env, api);
+  if (!number) { console.log('no current PR associated with this event; no report'); return 0; }
   const raw = env.PR_GATE_REQUIRED_CHECKS || '';
   const requiredChecks = raw.startsWith('[') ? JSON.parse(raw) : raw.split(',').map(s => s.trim()).filter(Boolean);
   if (!Array.isArray(requiredChecks) || requiredChecks.some(s => typeof s !== 'string' && (!s || typeof s.name !== 'string'))) throw new Error('invalid required-check policy');
-  const api = apiOverride || createClient(env.GITHUB_TOKEN);
   const { f } = await facts(api, repo, number, requiredChecks);
   const d = decide(f);
   // Do not overwrite a newer report with facts from an older head.

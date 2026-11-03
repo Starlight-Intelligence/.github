@@ -82,6 +82,8 @@ export function collectSignoffs({ comments = [], reviews = [], headSha }) {
 // dependencies, workflows (a PR that edits CI could edit this gate), and public route deletion.
 const FRANK_PATHS = [
   [/^\.github\/workflows\//, 'edits CI workflows'],
+  [/^\.github\/scripts\//, 'edits CI implementation'],
+  [/^scripts\/tests\/ci-aggregate\.test\.mjs$/, 'edits the required CI aggregate contract'],
   [/(^|\/)\.env/, 'touches env files'],
   [/(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|uv\.lock|pyproject\.toml)$/, 'changes dependencies'],
   [/(checkout|billing|pricing|payment|payout|refund|stripe|polar|wallet)/i, 'touches a money path'],
@@ -139,8 +141,7 @@ export function ciState(checkRuns = [], required = [], selfPrefix = 'pr-gate', h
     const matches = named.filter(r => r.appId === spec.appId && r.workflowPath === spec.workflowPath && shaMatches(headSha, r.headSha) && Number.isSafeInteger(r.runId) && r.runId > 0 && Number.isSafeInteger(r.runAttempt) && r.runAttempt > 0);
     if (matches.length !== 1 || named.length !== 1) { invalid.push(`${name}: missing, ambiguous or untrusted check origin/revision`); continue; }
     const r = matches[0];
-    if (!r) missing.push(name);
-    else if (r.status === 'completed' && r.conclusion !== 'success') notPassed.push(`${name} (${r.conclusion})`);
+    if (r.status === 'completed' && r.conclusion !== 'success') notPassed.push(`${name} (${r.conclusion})`);
   }
   return { bad, pending, missing, notPassed, invalid };
 }
