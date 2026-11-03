@@ -31,7 +31,55 @@ on:
         default: 8
 
 jobs:
+  resolve-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      pr-number: ${{ steps.resolve.outputs.pr-number }}
+    steps:
+      - name: Require the same immutable resolver and reusable source
+        env:
+          GATE_REF: ${{ inputs.gate-ref }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          node <<'NODE'
+          // source-ref-validator:start
+          const e = process.env;
+          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || (e.JOB_WORKFLOW_REPOSITORY || '').toLowerCase() !== 'starlight-intelligence/.github') process.exit(1);
+          // source-ref-validator:end
+          NODE
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Starlight-Intelligence/.github
+          ref: ${{ inputs.gate-ref }}
+          path: .pr-gate
+          persist-credentials: false
+      - name: Resolve only an API-authenticated current PR
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { createClient, resolvePrNumber } from './.pr-gate/pr-gate/run.mjs';
+          const number = await resolvePrNumber(process.env, createClient(process.env.GITHUB_TOKEN));
+          appendFileSync(process.env.GITHUB_OUTPUT, `pr-number=${number ?? ''}\n`);
+          NODE
+
   decide:
+    needs: resolve-pr
+    if: needs.resolve-pr.outputs.pr-number != ''
+    # Only eligible, resolved reports join this group. An unrelated comment
+    # cannot cancel a run, and all event types for the same PR serialize here.
+    concurrency:
+      group: starlight-pr-gate-${{ github.repository }}-${{ needs.resolve-pr.outputs.pr-number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -50,7 +98,7 @@ jobs:
           node <<'NODE'
           // source-ref-validator:start
           const e = process.env;
-          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || e.JOB_WORKFLOW_REPOSITORY !== 'Starlight-Intelligence/.github') process.exit(1);
+          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || (e.JOB_WORKFLOW_REPOSITORY || '').toLowerCase() !== 'starlight-intelligence/.github') process.exit(1);
           // source-ref-validator:end
           NODE
       - name: Load the gate
@@ -68,7 +116,10 @@ jobs:
       - name: Decide
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.pr-number }}
+          # Resolve once before the per-PR lock; do not resolve a second time
+          # under a workflow_run event and accidentally select another PR.
+          PR_GATE_EVENT_RESOLVED: 'true'
           PR_GATE_MERGE: ${{ inputs.merge }}
           PR_GATE_WAIT_MINUTES: ${{ inputs.wait-minutes }}
           PR_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}

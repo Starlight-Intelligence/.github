@@ -35,7 +35,7 @@ export async function all(api, path) {
 }
 
 export async function resolvePrNumber(env, api) {
-  if (env.GITHUB_EVENT_NAME !== 'workflow_run') {
+  if (env.PR_GATE_EVENT_RESOLVED === 'true' || env.GITHUB_EVENT_NAME !== 'workflow_run') {
     const raw = String(env.PR_NUMBER || '').trim();
     return /^[1-9][0-9]{0,8}$/.test(raw) ? Number(raw) : null;
   }
@@ -46,7 +46,9 @@ export async function resolvePrNumber(env, api) {
   // Re-read the run and resolve current open PRs by its actual repository/head.
   const run = await api(`/repos/${env.GITHUB_REPOSITORY}/actions/runs/${id}`);
   const allowed = String(env.PR_GATE_ALLOWED_WORKFLOWS || '.github/workflows/ci.yml,.github/workflows/pr-gate-poke.yml').split(',');
-  if (run.repository?.full_name !== env.GITHUB_REPOSITORY || !/^[a-f0-9]{40}$/.test(run.head_sha || '') || !allowed.includes(run.path?.split('@')[0]) || !['pull_request', 'pull_request_review'].includes(run.event)) throw new Error('untrusted workflow run relay');
+  if (run.repository?.full_name !== env.GITHUB_REPOSITORY || !/^[a-f0-9]{40}$/.test(run.head_sha || '') || !allowed.includes(run.path?.split('@')[0])) throw new Error('untrusted workflow run relay');
+  if (run.event === 'push') return null; // Main CI completion is not a PR review event.
+  if (!['pull_request', 'pull_request_review'].includes(run.event)) throw new Error('untrusted workflow run relay');
   const prs = await all(api, `/repos/${env.GITHUB_REPOSITORY}/commits/${run.head_sha}/pulls`);
   const candidates = prs.filter(p => p.state === 'open' && p.head?.sha === run.head_sha && p.head?.repo?.full_name === run.head_repository?.full_name && p.base?.repo?.full_name === env.GITHUB_REPOSITORY);
   if (candidates.length > 1) throw new Error('workflow head maps to multiple open PRs');
@@ -139,7 +141,8 @@ export async function main(env = process.env, apiOverride) {
   const body = [STICKY, `**pr-gate report: ${d.reasons.length ? 'BLOCKED' : 'WAITING'}** on \`${d.head}\``,
     `Branch routing hint: \`${d.author}\`; implementation-provider independence is **unverified**.`,
     ...d.reasons.map(s => `- blocked: ${s}`), ...d.waiting.map(s => `- waiting: ${s}`),
-    '', 'Report-only. No merge, production approval or independently authenticated maker receipt is supplied by this workflow.',
+    '', `Observed at ${new Date().toISOString()}; run ${env.GITHUB_RUN_ID || 'local'}.`,
+    'Report-only. No merge, production approval or independently authenticated maker receipt is supplied by this workflow.',
   ].join('\n');
   const comments = await all(api, `/repos/${repo}/issues/${number}/comments`);
   const own = comments.filter(c => c.user?.type === 'Bot' && c.user?.login === ACTIONS_BOT && c.body?.startsWith(STICKY)).sort((a, b) => b.id - a.id)[0];

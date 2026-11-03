@@ -24,10 +24,6 @@ permissions:
   checks: read
   actions: read
 
-concurrency:
-  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.head_sha || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   pr-gate:
     # Comments re-run the gate only for a result from an allowlisted reviewer bot, or an exact

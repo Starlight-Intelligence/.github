@@ -31,7 +31,7 @@ test('ambiguous current heads fail closed', () => fixture(env => {
 }));
 test('caller cannot use a PR title for routing or concurrency', () => {
   const caller = readFileSync(new URL('./caller.yml', import.meta.url), 'utf8');
-  assert.doesNotMatch(caller, /display_title/); assert.match(caller, /workflow_run\.head_sha/);
+  assert.doesNotMatch(caller, /display_title/); assert.doesNotMatch(caller, /^concurrency:/m);
 });
 const workflow = readFileSync(new URL('../.github/workflows/pr-gate.yml', import.meta.url), 'utf8');
 const validator = workflow.split('// source-ref-validator:start')[1].split('// source-ref-validator:end')[0];
@@ -41,4 +41,20 @@ for (const [label, vars, status] of [
   ['mutable ref', { GATE_REF: 'main', JOB_WORKFLOW_SHA: head, JOB_WORKFLOW_REPOSITORY: 'Starlight-Intelligence/.github' }, 1],
   ['wrong reusable repository', { GATE_REF: head, JOB_WORKFLOW_SHA: head, JOB_WORKFLOW_REPOSITORY: 'outside/fork' }, 1],
   ['missing runtime provenance', { GATE_REF: head }, 1],
+  ['case-insensitive GitHub repository identity', { GATE_REF: head, JOB_WORKFLOW_SHA: head, JOB_WORKFLOW_REPOSITORY: 'STARLIGHT-INTELLIGENCE/.github' }, 0],
 ]) test(`actual workflow validator: ${label}`, () => assert.equal(spawnSync(process.execPath, ['-e', validator], { env: vars }).status, status));
+test('main push completion is an explicit no-op', () => fixture(async env => assert.equal(await resolvePrNumber(env, relay({ event: 'push' })), null)));
+test('resolved event types serialize under the same PR without cancellation', () => {
+  const decide = workflow.split('\n  decide:')[1];
+  assert.match(decide, /needs: resolve-pr/);
+  assert.match(decide, /if: needs\.resolve-pr\.outputs\.pr-number != ''/);
+  assert.match(decide, /\n    concurrency:\n      group: starlight-pr-gate-\$\{\{ github.repository \}\}-\$\{\{ needs.resolve-pr.outputs.pr-number \}\}\n      cancel-in-progress: false/);
+  assert.match(decide, /PR_GATE_EVENT_RESOLVED: 'true'/);
+});
+test('locked report uses the resolved PR and never resolves a different PR again', () => fixture(async env => assert.equal(await resolvePrNumber({ ...env, PR_NUMBER: '12', PR_GATE_EVENT_RESOLVED: 'true' }, () => { throw new Error('must not query another PR'); }), 12)));
+test('privileged action pins and checkout ref stay bound to the validated input', () => {
+  const uses = [...workflow.matchAll(/uses: actions\/[\w-]+@([^\s]+)/g)].map(x => x[1]);
+  assert.ok(uses.length > 0); for (const ref of uses) assert.match(ref, /^[a-f0-9]{40}$/);
+  const checkouts = workflow.split(/- (?:name: Load the gate\n        )?uses: actions\/checkout@/).slice(1);
+  for (const checkout of checkouts) assert.match(checkout.split(/\n      - /)[0], /ref: \$\{\{ inputs.gate-ref \}\}/);
+});
