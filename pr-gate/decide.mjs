@@ -38,63 +38,27 @@ const MARKER_RE = /^\s*starlight-signoff:\s*harness=(\S+)\s+verdict=(\S+)\s+sha=
 const CHECKER_RE = /^\s*Checker:\s*([a-z0-9_-]+?)(?:-cloud)?\s*[·|-]\s*head\s+([0-9a-fA-F]{7,40})\s*[·|-]\s*verdict\s+(PASS|FAIL|BLOCK)\b/i;
 const CODEX_CLEAN_RE = /didn'?t find any major issues/i;
 const SEVERE_RE = /\bp[01]\b|p[01] badge/i;
-// Reviewer metadata includes thresholds and summaries, not findings or signoffs.
-// Preserve comment-shaped text rendered literally in code or escaped Markdown.
-// This is a conservative visibility filter, not a Markdown renderer: uncertain
-// or unterminated constructs remain available to the severity check.
-function reviewText(body) {
-  const source = String(body || '');
-  let out = '', i = 0, fence = null;
-  while (i < source.length) {
-    if (i === 0 || source[i - 1] === '\n') {
-      const newline = source.indexOf('\n', i);
-      const end = newline < 0 ? source.length : newline + 1;
-      const line = source.slice(i, end).replace(/\r?\n$/, '');
-      // Recognize code fences inside the common quote/list containers too.
-      const quoted = line.replace(/^(?: {0,3}>[ \t]?)*/, '');
-      const content = quoted.replace(/^(?: {0,3}(?:[-+*]|\d+[.)])[ \t]+)?/, '');
-      const marker = /^[ \t]*(`{3,}|~{3,})(.*)$/.exec(content);
-      if (fence) {
-        // A deeply indented fence may itself be literal code; never let it
-        // close a surrounding block and hide the visible lines that follow.
-        const closing = /^ {0,3}(`{3,}|~{3,})[ \t]*$/.exec(content);
-        if (closing && closing[1][0] === fence.char && closing[1].length >= fence.length) fence = null;
-        out += source.slice(i, end); i = end; continue;
-      }
-      if (marker && (marker[1][0] !== '`' || !marker[2].includes('`'))) {
-        fence = { char: marker[1][0], length: marker[1].length };
-        out += source.slice(i, end); i = end; continue;
-      }
-      if (/^(?: {4}| {0,3}\t)/.test(content) || /^ {0,3}(?:[-+*]|\d+[.)])(?: {5}| {0,4}\t)/.test(quoted)) {
-        out += source.slice(i, end); i = end; continue;
-      }
+// Full-media text excludes hidden metadata, but also omits image alt labels
+// (including real P1 badges). Recover alt text only from rendered image tags.
+// Tokenize comments and complete quoted tags so neither hidden images nor an
+// "alt" example inside another attribute can manufacture a finding.
+const HTML_TOKENS = /<!--(?:>|->|[\s\S]*?(?:-->|--!>|$))|<![^>]*>|<\?[^>]*>|<\/?[A-Za-z](?:[^"'<>]|"[^"]*"|'[^']*')*>/g;
+const HTML_ATTRIBUTES = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+function reviewText(item) {
+  if (typeof item.bodyText !== 'string' || typeof item.bodyHTML !== 'string') return null;
+  const labels = [];
+  for (const [tag] of item.bodyHTML.matchAll(HTML_TOKENS)) {
+    if (!/^<img(?=[\s/>])/i.test(tag)) continue;
+    for (const attr of tag.slice(4, -1).matchAll(HTML_ATTRIBUTES)) {
+      if (attr[1].toLowerCase() !== 'alt') continue;
+      labels.push((attr[2] ?? attr[3] ?? attr[4] ?? '').replace(/&#(?:x([0-9a-f]+)|([0-9]+));/gi, (_, hex, dec) => {
+        const code = Number.parseInt(hex ?? dec, hex ? 16 : 10);
+        return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : '\ufffd';
+      }));
+      break; // HTML's first alt attribute wins.
     }
-    if (source[i] === '\\') {
-      out += source.slice(i, i + 2); i += 2; continue;
-    }
-    if (source[i] === '`') {
-      let length = 1;
-      while (source[i + length] === '`') length++;
-      const delimiter = '`'.repeat(length);
-      let close = source.indexOf(delimiter, i + length);
-      while (close >= 0 && (source[close - 1] === '`' || source[close + length] === '`')) close = source.indexOf(delimiter, close + length);
-      if (close >= 0) {
-        out += source.slice(i, close + length); i = close + length; continue;
-      }
-      out += delimiter; i += length; continue;
-    }
-    if (source.startsWith('<!--', i)) {
-      if (source.startsWith('<!-->', i)) { i += 5; continue; }
-      if (source.startsWith('<!--->', i)) { i += 6; continue; }
-      const close = source.indexOf('-->', i + 4);
-      const ambiguous = source.indexOf('--!>', i + 4);
-      // Do not remove text across an ambiguous HTML-parser terminator.
-      if (ambiguous >= 0 && (close < 0 || ambiguous < close)) { out += source.slice(i); break; }
-      if (close >= 0) { i = close + 3; continue; }
-    }
-    out += source[i++];
   }
-  return out;
+  return [item.bodyText, ...labels].join('\n');
 }
 
 // GitHub's own bot accounts are the only reviewer identity an agent cannot type its way into.
@@ -121,16 +85,21 @@ export function collectSignoffs({ comments = [], reviews = [], headSha }) {
     // a visible P0/P1 against the head still blocks, even if metadata names the head.
     // That SHA can associate a block, but metadata can never turn a comment into a pass.
     const h = botHarness(c.user);
-    if (h && SEVERE_RE.test(reviewText(c.body)) && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
-      out.push({ harness: h, verdict: 'block', sha: head, via: 'bot-comment', trusted: true });
+    if (h && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
+      const body = reviewText(c);
+      if (body === null || SEVERE_RE.test(body)) {
+        out.push({ harness: h, verdict: body === null ? 'unreadable' : 'block', sha: head, via: 'bot-comment', trusted: true });
+      }
     }
   }
   for (const r of reviews) {
     const h = botHarness(r.user);
     if (!h || r.state === 'DISMISSED' || r.state === 'PENDING') continue;
-    const body = reviewText(r.body);
+    const body = reviewText(r);
     let verdict = null;
-    if (r.state === 'CHANGES_REQUESTED' || SEVERE_RE.test(body)) verdict = 'block';
+    if (r.state === 'CHANGES_REQUESTED') verdict = 'block';
+    else if (body === null) verdict = 'unreadable';
+    else if (SEVERE_RE.test(body)) verdict = 'block';
     else if (r.state === 'APPROVED' || CODEX_CLEAN_RE.test(body)) verdict = 'pass';
     // A COMMENTED review that neither approves nor says it is clean is not a verdict either way;
     // its inline findings surface as unresolved threads.
@@ -207,6 +176,8 @@ export function decide(f) {
     reasons.push('no linked intent: reference the issue, board item or ruling this PR serves');
   }
 
+  const unreadable = signoffs.filter((s) => s.verdict === 'unreadable' && onHead(s));
+  if (unreadable.length) reasons.push(`review text unavailable on this commit from ${[...new Set(unreadable.map((s) => s.harness))].join(', ')}`);
   const blocks = signoffs.filter((s) => (s.verdict === 'block' || s.verdict === 'fail') && onHead(s) && s.harness !== author);
   const valid = signoffs.filter((s) => s.verdict === 'pass' && onHead(s) && s.harness !== author);
   if (blocks.length) reasons.push(`blocked on this commit by ${[...new Set(blocks.map((b) => b.harness))].join(', ')}`);
