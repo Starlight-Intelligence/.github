@@ -28,9 +28,9 @@ flowchart LR
   DI["starlight-design-intelligence<br/>Brand packs & UI tokens"] --> CC
 ```
 
-## Source repositories
+## Repositories and contribution routes
 
-The organization copies are federated mirrors under the current operating contract. Submit changes to the sources linked below until a reviewed migration changes that contract.
+The organization copies are federated mirrors under the current operating contract. Follow each linked repository's own contribution and provenance instructions until a reviewed migration changes that contract. Starlight Evals is itself a publication mirror: methodology changes belong in [SIS](https://github.com/frankxai/Starlight-Intelligence-System/tree/main/tools/proving-ground).
 
 | Repository | Purpose | Link |
 | :--- | :--- | :--- |
@@ -40,17 +40,17 @@ The organization copies are federated mirrors under the current operating contra
 | [**starlight-evals**](https://github.com/frankxai/starlight-evals) | Whole-system evaluation harness testing models, memory recall, skills, and multi-agent routing. | [Website](https://starlightintelligence.org) |
 | [**starlight-technology**](https://github.com/frankxai/starlight-technology) | Hardware sizing, local inference benchmarks, and workstation architecture guides. | [Website](https://starlightintelligence.ai) |
 
-## Quickstart
+## Inspect before installing
 
-The commands below are documented entry points, not a verified clean-machine install report. When following them, please [report reproducible installation problems](https://github.com/Starlight-Intelligence/.github/blob/main/COMMUNITY.md) so the onboarding can be independently tested.
+Browse the [skills catalog](https://github.com/frankxai/starlight-agent-skills/blob/main/docs/CATALOG.md) and select only the capabilities your task needs. Read the selected skill's instructions and source before adding it to a harness. This profile does not advertise an npm installer until a published package and its commands are verified.
+
+For a small source-only check, the [Evals README](https://github.com/frankxai/starlight-evals#90-second-start) documents receipt validation with Node.js 22+. The commands below do not install dependencies or run model evaluations. This is a documented path, not a clean-machine execution receipt; [report reproducible problems](https://github.com/Starlight-Intelligence/.github/blob/main/COMMUNITY.md).
 
 ```bash
-# Install portable Starlight substrate skills
-npx @starlight-intelligence/sis@latest init
-
-# Run whole-system evaluation checks
+# Validate published JSON receipts
 git clone https://github.com/frankxai/starlight-evals.git
-cd starlight-evals && npm test
+cd starlight-evals
+npm run validate
 ```
 
 ## Engineering standards
