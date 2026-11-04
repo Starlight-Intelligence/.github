@@ -8,6 +8,10 @@ const claudeBot = { login: 'claude[bot]', type: 'Bot' };
 const human = { login: 'frankxai', type: 'User' };
 const greenCI = [{ name: 'test', status: 'completed', conclusion: 'success' }];
 const cleanReview = { user: codexBot, commitId: HEAD, state: 'COMMENTED', body: "Codex Review: Didn't find any major issues." };
+const codexMetadata = (sha = HEAD) => [
+  '<!-- codex-review-state:v1 ' + JSON.stringify({ code_review: { commit_sha: sha, has_any_findings: false } }) + ' -->',
+  '<!-- codex-security-review:v1 ' + JSON.stringify({ blockingSeverityThreshold: 'P0', headSha: sha }) + ' -->',
+].join('\n');
 
 const base = (over = {}) => ({
   headRef: 'agent/claude/thing',
@@ -65,6 +69,56 @@ test('a bot review that is neither approval nor clean is not a pass; P0/P1 text 
 test('a human account or a look-alike bot claiming to be Codex signs nothing', () => {
   assert.equal(decide(base({ reviews: [{ ...cleanReview, user: human }] })).ok, false);
   assert.equal(decide(base({ reviews: [{ ...cleanReview, user: { login: 'my-codex-helper[bot]', type: 'Bot' } }] })).ok, false);
+});
+
+test('Codex metadata does not block a summary comment or make it a signoff', () => {
+  const body = `${codexMetadata()}\nDidn't find any major issues. Reviewed ${HEAD.slice(0, 7)}`;
+  const d = decide(base({ reviews: [], comments: [{ user: codexBot, body }] }));
+  assert.deepEqual(d.reasons, []);
+  assert.equal(d.pending, true);
+  assert.equal(d.ok, false);
+  assert.deepEqual(d.signers, []);
+  assert.match(d.waiting.join(), /needs a review/);
+});
+
+test('a clean head review is not vetoed by metadata in its summary comment', () => {
+  const d = decide(base({ comments: [{ user: codexBot, body: `${codexMetadata()}\nCode review completed.` }] }));
+  assert.equal(d.ok, true, JSON.stringify(d));
+});
+
+test('metadata does not veto a clean review or replace its commit binding', () => {
+  for (const state of ['COMMENTED', 'APPROVED']) {
+    const review = { ...cleanReview, state, body: `${codexMetadata()}\nDidn't find any major issues.` };
+    assert.equal(decide(base({ reviews: [review] })).ok, true, state);
+    for (const commitId of ['', 'ffffffffffffffffffffffffffffffffffffffff']) {
+      assert.equal(decide(base({ reviews: [{ ...review, commitId }] })).ok, false, `${state}: ${commitId}`);
+    }
+  }
+});
+
+test('visible P0/P1 comments still block when only metadata identifies the head', () => {
+  for (const severity of ['P0', 'P1']) {
+    const body = `${codexMetadata()}\n${severity}: a real finding remains.`;
+    const d = decide(base({ comments: [{ user: codexBot, body }] }));
+    assert.equal(d.ok, false, severity);
+    assert.match(d.reasons.join(), /blocked on this commit by codex/);
+  }
+});
+
+test('visible P0/P1 findings still block reviews alongside metadata', () => {
+  for (const severity of ['P0', 'P1']) {
+    const body = `${codexMetadata()}\n${severity}: a real finding remains.`;
+    const d = decide(base({ reviews: [{ ...cleanReview, state: 'APPROVED', body }] }));
+    assert.equal(d.ok, false, severity);
+    assert.match(d.reasons.join(), /blocked on this commit by codex/);
+  }
+});
+
+test('a clean phrase hidden in metadata cannot sign off a commented review', () => {
+  const body = '<!-- codex-review-state:v1 {"summary":"Didnt find any major issues"} -->';
+  const d = decide(base({ reviews: [{ ...cleanReview, body }] }));
+  assert.equal(d.ok, false);
+  assert.deepEqual(d.signers, []);
 });
 
 // Codex review of 1404c37 reproduced the next two as false passes.

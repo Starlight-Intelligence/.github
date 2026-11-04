@@ -38,6 +38,8 @@ const MARKER_RE = /^\s*starlight-signoff:\s*harness=(\S+)\s+verdict=(\S+)\s+sha=
 const CHECKER_RE = /^\s*Checker:\s*([a-z0-9_-]+?)(?:-cloud)?\s*[·|-]\s*head\s+([0-9a-fA-F]{7,40})\s*[·|-]\s*verdict\s+(PASS|FAIL|BLOCK)\b/i;
 const CODEX_CLEAN_RE = /didn'?t find any major issues/i;
 const SEVERE_RE = /\bp[01]\b|p[01] badge/i;
+// Reviewer metadata includes severity thresholds and summaries, not findings or signoffs.
+const reviewText = (body) => String(body || '').replace(/<!--[\s\S]*?-->/g, '');
 
 // GitHub's own bot accounts are the only reviewer identity an agent cannot type its way into.
 // Exact logins on purpose: a substring match would accept any app whose name contains "codex".
@@ -60,16 +62,17 @@ export function collectSignoffs({ comments = [], reviews = [], headSha }) {
     }
     // Bot comments are not sign-offs: they carry no commit id, and a "no major issues" line can sit
     // beside a P1 in the same comment. Only commit-bound bot reviews pass. A bot comment that names
-    // a P0/P1 against the head still blocks.
+    // a visible P0/P1 against the head still blocks, even if metadata names the head.
+    // That SHA can associate a block, but metadata can never turn a comment into a pass.
     const h = botHarness(c.user);
-    if (h && SEVERE_RE.test(c.body || '') && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
+    if (h && SEVERE_RE.test(reviewText(c.body)) && head.length >= 7 && String(c.body).toLowerCase().includes(head.slice(0, 7))) {
       out.push({ harness: h, verdict: 'block', sha: head, via: 'bot-comment', trusted: true });
     }
   }
   for (const r of reviews) {
     const h = botHarness(r.user);
     if (!h || r.state === 'DISMISSED' || r.state === 'PENDING') continue;
-    const body = String(r.body || '');
+    const body = reviewText(r.body);
     let verdict = null;
     if (r.state === 'CHANGES_REQUESTED' || SEVERE_RE.test(body)) verdict = 'block';
     else if (r.state === 'APPROVED' || CODEX_CLEAN_RE.test(body)) verdict = 'pass';
