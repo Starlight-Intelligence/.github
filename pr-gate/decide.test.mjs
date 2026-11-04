@@ -121,6 +121,57 @@ test('a clean phrase hidden in metadata cannot sign off a commented review', () 
   assert.deepEqual(d.signers, []);
 });
 
+test('HTML-comment literals visible as Markdown code or escaped text still block', () => {
+  const literal = '<!-- P1: visible serious finding -->';
+  const bodies = [
+    '`' + literal + '`',
+    '`` a ` ' + literal + ' ``',
+    '```html\n' + literal + '\n```',
+    '~~~html\n' + literal + '\n~~~~',
+    '```html\n' + literal,
+    '    ' + literal,
+    ' \t' + literal,
+    '-     ' + literal,
+    '\\' + literal,
+    '> ```html\n> ' + literal + '\n> ```',
+    '- ```html\n  ' + literal + '\n  ```',
+    '- item\n\n    ```html\n  ' + literal + '\n  ```',
+    '```html\n    ```\n' + literal + '\n```',
+  ];
+  for (const visible of bodies) {
+    const body = `${codexMetadata()}\n${visible}`;
+    for (const facts of [
+      { comments: [{ user: codexBot, body }] },
+      { reviews: [{ ...cleanReview, state: 'APPROVED', body }] },
+    ]) {
+      const d = decide(base(facts));
+      assert.equal(d.ok, false, visible);
+      assert.match(d.reasons.join(), /blocked on this commit by codex/, visible);
+    }
+  }
+});
+
+test('backticks in hidden metadata stay hidden alongside visible ordinary code', () => {
+  const body = '<!-- threshold: `P0` -->\n`ordinary code`\nDidnt find any major issues.';
+  assert.equal(decide(base({ reviews: [{ ...cleanReview, body }] })).ok, true);
+  const fenced = '```js\nconst value = 1;\n```\n' + body;
+  assert.equal(decide(base({ reviews: [{ ...cleanReview, body: fenced }] })).ok, true);
+});
+
+test('short or ambiguous comment endings cannot swallow a later visible finding', () => {
+  for (const opening of ['<!-->', '<!--->', '<!-- ambiguous --!>']) {
+    const body = `${opening}\nP1: visible serious finding\n${codexMetadata()}`;
+    for (const facts of [
+      { comments: [{ user: codexBot, body }] },
+      { reviews: [{ ...cleanReview, state: 'APPROVED', body }] },
+    ]) {
+      const d = decide(base(facts));
+      assert.equal(d.ok, false, opening);
+      assert.match(d.reasons.join(), /blocked on this commit by codex/, opening);
+    }
+  }
+});
+
 // Codex review of 1404c37 reproduced the next two as false passes.
 test('bot comments never sign off; a P0/P1 bot comment on the head blocks', () => {
   const clean = decide(base({ reviews: [], comments: [{ user: codexBot, body: `Didn't find any major issues. Reviewed ${HEAD.slice(0, 10)}` }] }));
