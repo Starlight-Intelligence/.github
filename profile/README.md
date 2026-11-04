@@ -2,9 +2,9 @@
 
 **One public home for the Starlight open ecosystem.** Build sovereign AI systems from modular protocol, memory, skills, evals, voice and orchestration components. Adopt the whole stack or just the interfaces you need.
 
-**Start here:** [Join the community](../COMMUNITY.md) · [Contribute](../CONTRIBUTING.md) · [Organization map & consolidation](../docs/ORGANIZATION-MAP.md) · [Community operations](../docs/COMMUNITY-OPERATIONS.md)
+**Start here:** [Join the community](https://github.com/Starlight-Intelligence/.github/blob/main/COMMUNITY.md) · [Contribute](https://github.com/Starlight-Intelligence/.github/blob/main/CONTRIBUTING.md) · [Organization map & consolidation](https://github.com/Starlight-Intelligence/.github/blob/main/docs/ORGANIZATION-MAP.md) · [Community operations](https://github.com/Starlight-Intelligence/.github/blob/main/docs/COMMUNITY-OPERATIONS.md)
 
-> **November 2026 ownership direction:** `Starlight-Intelligence` becomes the single canonical Starlight GitHub organization. **SIP** is the protocol; **SIS** is its reference implementation. The existing `Starlight-Intelligence-Systems` organization and original repositories under `frankxai` are still active during migration—please follow each repo's declared source of truth rather than opening duplicate PRs.
+> **November 2026 proposal:** `Starlight-Intelligence` would become the single public Starlight GitHub organization, subject to owner adoption and each repository's migration gates. **SIP** is the protocol; **SIS** is its reference implementation. The existing `Starlight-Intelligence-Systems` organization and original repositories under `frankxai` remain active—please follow each repo's declared source of truth rather than opening duplicate PRs.
 
 Personal AI command center, memory engine, voice runtime, and cross-harness agent operating layer.
 
@@ -28,26 +28,28 @@ flowchart LR
   DI["starlight-design-intelligence<br/>Brand packs & UI tokens"] --> CC
 ```
 
-## Flagship repositories
+## Source repositories
+
+The organization copies are federated mirrors under the current operating contract. Submit changes to the sources linked below until a reviewed migration changes that contract.
 
 | Repository | Purpose | Link |
 | :--- | :--- | :--- |
-| [**starlight-voice**](https://github.com/Starlight-Intelligence/starlight-voice) | Personal voice operator with local STT/TTS, session memory, and real-time visualization. | [Website](https://starlightintelligence.ai) |
-| [**starlight-design-intelligence**](https://github.com/Starlight-Intelligence/starlight-design-intelligence) | Brand packs, typography scales, motion tokens, and editorial gates across the estate. | [Website](https://starlightintelligence.ai) |
-| [**starlight-agent-skills**](https://github.com/Starlight-Intelligence/starlight-agent-skills) | Portable Starlight substrate skills for Claude Code, Codex, Cursor, Gemini, and OpenCode. | [Website](https://starlightintelligence.org) |
-| [**starlight-evals**](https://github.com/Starlight-Intelligence/starlight-evals) | Whole-system evaluation harness testing models, memory recall, skills, and multi-agent routing. | [Website](https://starlightintelligence.org) |
-| [**starlight-technology**](https://github.com/Starlight-Intelligence/starlight-technology) | Hardware sizing, local inference benchmarks, and workstation architecture guides. | [Website](https://starlightintelligence.ai) |
+| [**starlight-voice**](https://github.com/frankxai/starlight-voice) | Personal voice operator with local STT/TTS, session memory, and real-time visualization. | [Website](https://starlightintelligence.ai) |
+| [**starlight-design-intelligence**](https://github.com/frankxai/starlight-design-intelligence) | Brand packs, typography scales, motion tokens, and editorial gates across the estate. | [Website](https://starlightintelligence.ai) |
+| [**starlight-agent-skills**](https://github.com/frankxai/starlight-agent-skills) | Portable Starlight substrate skills for Claude Code, Codex, Cursor, Gemini, and OpenCode. | [Website](https://starlightintelligence.org) |
+| [**starlight-evals**](https://github.com/frankxai/starlight-evals) | Whole-system evaluation harness testing models, memory recall, skills, and multi-agent routing. | [Website](https://starlightintelligence.org) |
+| [**starlight-technology**](https://github.com/frankxai/starlight-technology) | Hardware sizing, local inference benchmarks, and workstation architecture guides. | [Website](https://starlightintelligence.ai) |
 
 ## Quickstart
 
-The commands below are documented entry points, not a verified clean-machine install report. When following them, please [report reproducible installation problems](../COMMUNITY.md) so the onboarding can be independently tested.
+The commands below are documented entry points, not a verified clean-machine install report. When following them, please [report reproducible installation problems](https://github.com/Starlight-Intelligence/.github/blob/main/COMMUNITY.md) so the onboarding can be independently tested.
 
 ```bash
 # Install portable Starlight substrate skills
 npx @starlight-intelligence/sis@latest init
 
 # Run whole-system evaluation checks
-git clone https://github.com/Starlight-Intelligence/starlight-evals.git
+git clone https://github.com/frankxai/starlight-evals.git
 cd starlight-evals && npm test
 ```
 
@@ -62,4 +64,4 @@ Every repository in **Starlight Intelligence** follows the Starlight estate engi
 
 ---
 
-<sub>Maintained by <a href="https://github.com/frankxai">Frank Riemer (frankxai)</a> Â· Built on the <a href="https://github.com/Starlight-Intelligence-Systems/Starlight-Intelligence-System">Starlight Intelligence Protocol (SIP)</a></sub>
+<sub>Maintained by <a href="https://github.com/frankxai">Frank Riemer (frankxai)</a> Â· Built on the <a href="https://github.com/frankxai/Starlight-Intelligence-System">Starlight Intelligence Protocol (SIP)</a></sub>

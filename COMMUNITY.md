@@ -10,8 +10,8 @@ Starlight Intelligence builds portable infrastructure for people and AI agents t
 | --- | --- |
 | Learn what Starlight is | [Organization profile](profile/README.md) and [product site](https://starlightintelligence.ai) |
 | Examine SIP or the SIS reference implementation | [Current source-of-truth original](https://github.com/frankxai/Starlight-Intelligence-System) pending a reviewed transfer to this organization |
-| Contribute a portable skill | [Starlight Agent Skills](https://github.com/Starlight-Intelligence/starlight-agent-skills) |
-| Contribute a benchmark or reproducibility fix | [Starlight Evals](https://github.com/Starlight-Intelligence/starlight-evals); honor its documented source-of-truth/freshness notices |
+| Contribute a portable skill | [Starlight Agent Skills source](https://github.com/frankxai/starlight-agent-skills); the organization copy is a federated mirror |
+| Contribute a benchmark or reproducibility fix | [Starlight Evals source](https://github.com/frankxai/starlight-evals); honor its documented source-of-truth/freshness notices |
 | Explore research or substrate experiments | [SIS historical organization](https://github.com/Starlight-Intelligence-Systems), during consolidation |
 | Report a bug or security issue | The affected repository's issue template or private security advisory, respectively |
 

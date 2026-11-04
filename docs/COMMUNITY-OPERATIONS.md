@@ -15,7 +15,7 @@ Maintainer approval is the final control point. Agents may read, analyze, propos
 | Community Editor | Release notes, demo requests, monthly event calendar | Approval-ready copy | Owner approves external communications |
 | Observatory | Track issues, PR latency, installs and contributor trends | Evidence ledger, not invented metrics | Publish only attributable aggregate data |
 
-One task ID -> one repo -> one branch/PR -> one named accountable maintainer. Maker and Checker are separate. The standing source for cross-brand governance is the private `AI-Architect-Studio/agentic-ops`; GitHub holds accepted code and release truth.
+One task ID -> one repo -> one branch/PR -> one named accountable maintainer. Maker and Checker are separate. Maintainers resolve cross-brand ownership against the reviewed private portfolio Registry; this public community proposal does not replace that authority. GitHub holds accepted code and release truth.
 
 ## Workflow
 

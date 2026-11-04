@@ -1,6 +1,6 @@
 # Starlight GitHub organization policy
 
-Decision date: 2026-11-02. **Target state: one active public Starlight organization, `Starlight-Intelligence`.** This is a proposed migration policy; it does not mean transfers have already occurred.
+Proposal date: 2026-11-02. **Proposed target: one active public Starlight organization, `Starlight-Intelligence`.** This draft requires owner adoption and separate approval for each migration; it does not mean transfers have already occurred.
 
 ## Product vocabulary
 
@@ -21,7 +21,7 @@ Decision date: 2026-11-02. **Target state: one active public Starlight organizat
 | `starlight-memory-vault` | Private SI, only if safe and needed | No publicization, secrets, private memory, or raw personal data migration |
 | `starlight-memory`, `starlight-kernel`, `starlight-command-center`, `starlightintelligence.ai` | SI | Keep product/private boundaries and release controls |
 | `Arcanea-Labs/Starlight-Intelligence-System` | Archive or explicitly identify as compatibility mirror | Audit historical fork consumers before retirement |
-| `AI-Architect-Studio/agentic-ops` | Remain private in AI Architect Studio | Portfolio-level policy and evidence, not public SI community data |
+| Private portfolio Registry | Existing reviewed canonical source | Portfolio-level policy and evidence; ownership changes require a separate Registry decision, not this community proposal |
 | `Starlight-Intelligence/.github` | SI | Central profile, community standards, and long-lived org Discussions source |
 
 ## Non-negotiable migration gate
