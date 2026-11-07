@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Starlight Intelligence social preview">
+  <title>Starlight Intelligence</title>
+  <desc>Social preview card: wordmark, survey star map and calibrated ruler on deep navy.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#071120"/>
+      <stop offset="1" stop-color="#040910"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="955" cy="300" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FCD34D" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#FCD34D" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="haze" cx="120" cy="120" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E5FF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#00E5FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#glow)"/>
+  <rect width="1280" height="640" fill="url(#haze)"/>
+  <rect width="1280" height="640" filter="url(#grain)" opacity="0.05"/>
+
+  <!-- star field -->
+  <g fill="#EAF4FF">
+    <circle cx="150" cy="90" r="1.5" opacity="0.45"/>
+    <circle cx="240" cy="330" r="1.1" opacity="0.3"/>
+    <circle cx="180" cy="520" r="1.4" opacity="0.35"/>
+    <circle cx="420" cy="80" r="1.2" opacity="0.35"/>
+    <circle cx="520" cy="240" r="1" opacity="0.25"/>
+    <circle cx="620" cy="430" r="1.3" opacity="0.3"/>
+    <circle cx="700" cy="120" r="1.1" opacity="0.3"/>
+    <circle cx="760" cy="560" r="1.2" opacity="0.3"/>
+    <circle cx="90" cy="430" r="1" opacity="0.3"/>
+    <circle cx="360" cy="580" r="1.3" opacity="0.3"/>
+    <circle cx="1240" cy="420" r="1.2" opacity="0.35"/>
+    <circle cx="1150" cy="560" r="1" opacity="0.3"/>
+    <circle cx="330" cy="470" r="1.3" opacity="0.4" fill="#FCD34D"/>
+    <circle cx="660" cy="70" r="1.2" opacity="0.35" fill="#FCD34D"/>
+  </g>
+
+  <!-- corner registration ticks -->
+  <g stroke="#00E5FF" stroke-opacity="0.5" stroke-width="1.5" fill="none">
+    <path d="M28,50 V28 H50"/>
+    <path d="M1230,28 H1252 V50"/>
+    <path d="M28,590 V612 H50"/>
+    <path d="M1230,612 H1252 V590"/>
+  </g>
+
+  <!-- wordmark block -->
+  <text x="96" y="192" font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="16" letter-spacing="4" fill="#00E5FF">PRECISION INSTRUMENTS</text>
+  <text x="96" y="306" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="600" letter-spacing="0.5" fill="#F1F7FF">Starlight</text>
+  <text x="96" y="402" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="600" letter-spacing="0.5" fill="#FCD34D">Intelligence</text>
+  <text x="96" y="460" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="26" fill="#B9CCDF">Measured intelligence for teams that ship.</text>
+  <text x="96" y="520" font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="15" fill="#00E5FF">github.com/Starlight-Intelligence</text>
+
+  <!-- star chart -->
+  <g fill="none" stroke-linecap="butt">
+    <line x1="775" y1="300" x2="1135" y2="300" stroke="#00E5FF" stroke-opacity="0.18"/>
+    <line x1="955" y1="150" x2="955" y2="460" stroke="#00E5FF" stroke-opacity="0.18"/>
+    <path d="M795.3,241.9 A170,170 0 0 1 1114.7,241.9" stroke="#00E5FF" stroke-opacity="0.3" stroke-width="1"/>
+    <path d="M795.3,241.9 A170,170 0 0 1 1114.7,241.9" stroke="#00E5FF" stroke-opacity="0.35" stroke-width="10" stroke-dasharray="1.5 24.46"/>
+    <circle cx="955" cy="300" r="150" stroke="#FCD34D" stroke-opacity="0.45" stroke-width="8" stroke-dasharray="2 37.27"/>
+    <circle cx="955" cy="300" r="120" stroke="#FCD34D" stroke-opacity="0.9" stroke-width="1.5"/>
+    <circle cx="955" cy="300" r="96" stroke="#00E5FF" stroke-opacity="0.5" stroke-width="1" stroke-dasharray="10 6"/>
+    <circle cx="955" cy="300" r="64" stroke="#00E5FF" stroke-opacity="0.3" stroke-width="1"/>
+  </g>
+  <circle cx="1046.9" cy="222.9" r="3" fill="#FCD34D"/>
+  <circle cx="863.1" cy="377.1" r="3" fill="#00E5FF"/>
+  <path d="M955,284 L957.56,297.44 L971,300 L957.56,302.56 L955,316 L952.44,302.56 L939,300 L952.44,297.44 Z" fill="#FCD34D"/>
+
+  <!-- charted constellation -->
+  <polyline points="1068,96 1128,120 1188,92" stroke="#00E5FF" stroke-opacity="0.3" stroke-width="1" fill="none"/>
+  <circle cx="1068" cy="96" r="2" fill="#FCD34D" opacity="0.85"/>
+  <circle cx="1128" cy="120" r="1.8" fill="#FCD34D" opacity="0.85"/>
+  <path d="M1188,85 L1189.4,90.6 L1195,92 L1189.4,93.4 L1188,99 L1186.6,93.4 L1181,92 L1186.6,90.6 Z" fill="#FCD34D" opacity="0.9"/>
+
+  <text x="955" y="512" text-anchor="middle" font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="12" letter-spacing="2" fill="#00E5FF">SECTOR 07 · FIELD SURVEY</text>
+
+  <!-- calibrated ruler -->
+  <g stroke="#00E5FF" fill="none">
+    <line x1="96" y1="602" x2="1136" y2="602" stroke-opacity="0.18"/>
+    <line x1="96" y1="602" x2="1136" y2="602" stroke-opacity="0.3" stroke-width="4" stroke-dasharray="1.2 14.8"/>
+    <line x1="96" y1="602" x2="1136" y2="602" stroke-opacity="0.45" stroke-width="10" stroke-dasharray="1.4 78.6"/>
+  </g>
+  <text x="1184" y="590" text-anchor="end" font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="11" fill="#00E5FF">51.4778° N · 0.0015° W</text>
+</svg>

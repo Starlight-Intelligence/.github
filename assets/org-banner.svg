@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="Starlight Intelligence org banner">
+  <title>Starlight Intelligence</title>
+  <desc>Deep navy instrument-panel banner with survey reticle, calibrated ruler and gold-accented wordmark.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#081326"/>
+      <stop offset="1" stop-color="#050B14"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="1000" cy="158" r="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FCD34D" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#FCD34D" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#bg)"/>
+  <rect width="1280" height="320" fill="url(#glow)"/>
+  <rect width="1280" height="320" filter="url(#grain)" opacity="0.05"/>
+
+  <!-- star field -->
+  <g fill="#EAF4FF">
+    <circle cx="120" cy="50" r="1.4" opacity="0.5"/>
+    <circle cx="210" cy="150" r="1.1" opacity="0.35"/>
+    <circle cx="300" cy="70" r="1.2" opacity="0.4"/>
+    <circle cx="360" cy="180" r="1" opacity="0.3"/>
+    <circle cx="420" cy="262" r="1.3" opacity="0.35"/>
+    <circle cx="480" cy="58" r="1.1" opacity="0.3"/>
+    <circle cx="560" cy="232" r="1.5" opacity="0.4"/>
+    <circle cx="640" cy="120" r="1" opacity="0.3"/>
+    <circle cx="700" cy="200" r="1.2" opacity="0.35"/>
+    <circle cx="742" cy="80" r="1" opacity="0.3"/>
+    <circle cx="90" cy="296" r="1.2" opacity="0.3"/>
+    <circle cx="860" cy="236" r="1.2" opacity="0.4"/>
+    <circle cx="1150" cy="118" r="1" opacity="0.4"/>
+    <circle cx="1184" cy="226" r="1.3" opacity="0.35"/>
+    <circle cx="1214" cy="60" r="1.1" opacity="0.3"/>
+    <circle cx="820" cy="120" r="1" opacity="0.3"/>
+    <circle cx="770" cy="180" r="1.1" opacity="0.3"/>
+    <circle cx="540" cy="150" r="1.4" opacity="0.5" fill="#FCD34D"/>
+    <circle cx="250" cy="210" r="1.2" opacity="0.35" fill="#FCD34D"/>
+  </g>
+
+  <!-- charted constellation -->
+  <g stroke="#00E5FF" stroke-opacity="0.3" stroke-width="1" fill="none">
+    <polyline points="880,58 946,42 1012,68 1084,50"/>
+  </g>
+  <g fill="#FCD34D">
+    <circle cx="880" cy="58" r="2" opacity="0.85"/>
+    <circle cx="946" cy="42" r="1.8" opacity="0.85"/>
+    <circle cx="1012" cy="68" r="2.1" opacity="0.85"/>
+  </g>
+  <path d="M1084,44 L1085,49 L1090,50 L1085,51 L1084,56 L1083,51 L1078,50 L1083,49 Z" fill="#FCD34D" opacity="0.9"/>
+
+  <!-- survey reticle -->
+  <g stroke-linecap="butt" fill="none">
+    <line x1="880" y1="158" x2="1120" y2="158" stroke="#00E5FF" stroke-opacity="0.22"/>
+    <line x1="1000" y1="60" x2="1000" y2="262" stroke="#00E5FF" stroke-opacity="0.22"/>
+    <circle cx="1000" cy="158" r="72" stroke="#FCD34D" stroke-opacity="0.5" stroke-width="5" stroke-dasharray="1.3 11.27"/>
+    <circle cx="1000" cy="158" r="58" stroke="#FCD34D" stroke-opacity="0.9" stroke-width="1.2"/>
+    <circle cx="1000" cy="158" r="38" stroke="#00E5FF" stroke-opacity="0.5" stroke-width="1"/>
+    <path d="M915.03,135.23 A88,88 0 0 1 1084.97,135.23" stroke="#00E5FF" stroke-opacity="0.35" stroke-width="1"/>
+    <path d="M915.03,135.23 A88,88 0 0 1 1084.97,135.23" stroke="#00E5FF" stroke-opacity="0.4" stroke-width="8" stroke-dasharray="1.5 17.7"/>
+  </g>
+  <circle cx="962.7" cy="202.4" r="2.6" fill="#00E5FF"/>
+  <circle cx="1067.7" cy="182.6" r="2.4" fill="#FCD34D"/>
+  <path d="M1000,145 L1002.08,155.92 L1013,158 L1002.08,160.08 L1000,171 L997.92,160.08 L987,158 L997.92,155.92 Z" fill="#FCD34D"/>
+
+  <!-- instrument readouts -->
+  <g font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="11">
+    <text x="1078" y="104" fill="#00E5FF">OBJ 0047 · TRACKING</text>
+    <text x="1078" y="122" fill="#FCD34D">MAG +1.84</text>
+    <text x="1196" y="286" fill="#00E5FF" text-anchor="end">51.4778° N · 0.0015° W</text>
+  </g>
+
+  <!-- calibrated ruler -->
+  <g stroke="#00E5FF" fill="none">
+    <line x1="80" y1="300" x2="1200" y2="300" stroke-opacity="0.18"/>
+    <line x1="80" y1="300" x2="1200" y2="300" stroke-opacity="0.3" stroke-width="4" stroke-dasharray="1.2 14.8"/>
+    <line x1="80" y1="300" x2="1200" y2="300" stroke-opacity="0.45" stroke-width="10" stroke-dasharray="1.4 78.6"/>
+  </g>
+
+  <!-- corner registration ticks -->
+  <g stroke="#00E5FF" stroke-opacity="0.55" stroke-width="1.5" fill="none">
+    <path d="M24,42 V24 H42"/>
+    <path d="M1238,24 H1256 V42"/>
+    <path d="M24,278 V296 H42"/>
+    <path d="M1238,296 H1256 V278"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="80" y="112" font-family="Consolas, 'Cascadia Mono', Menlo, 'Courier New', monospace" font-size="13" letter-spacing="4" fill="#00E5FF">PRECISION INSTRUMENTS</text>
+  <text x="80" y="176" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="60" font-weight="600" letter-spacing="0.5"><tspan fill="#F1F7FF">Starlight </tspan><tspan fill="#FCD34D">Intelligence</tspan></text>
+  <text x="80" y="224" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="20" fill="#B9CCDF">Measured intelligence for teams that ship.</text>
+</svg>

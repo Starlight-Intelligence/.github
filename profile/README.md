@@ -1,14 +1,28 @@
-# Starlight Intelligence
+﻿![Starlight Intelligence](https://raw.githubusercontent.com/Starlight-Intelligence/.github/main/assets/org-banner.png)
 
 Personal AI command center, memory engine, voice runtime, and cross-harness agent operating layer.
 
-**Website:** [starlightintelligence.ai](https://starlightintelligence.ai) Â· **Ecosystem:** [Starlight Intelligence](https://github.com/Starlight-Intelligence) Â· [Starlight Systems](https://github.com/Starlight-Intelligence-Systems) Â· [Arcanea Labs](https://github.com/Arcanea-Labs) Â· [GenCreator](https://github.com/GenCreator-ai) Â· [FrankX](https://github.com/FrankX-AI)
+Running more than one coding agent is now normal. Starlight builds the layer that keeps them coherent: one
+cockpit, one configuration, one memory, one voice, and an evaluation harness that checks the parts still
+work together after every change.
+
+**Website** [starlightintelligence.ai](https://starlightintelligence.ai) Â· **Protocol** [starlightintelligence.org/protocol](https://starlightintelligence.org/protocol) Â· **Sister orgs** [Starlight Systems](https://github.com/Starlight-Intelligence-Systems) Â· [Arcanea Labs](https://github.com/Arcanea-Labs) Â· [GenCreator](https://github.com/GenCreator-ai) Â· [FrankX](https://github.com/FrankX-AI)
 
 ---
 
-## Overview
+## Public repositories
 
-Starlight Intelligence builds the operational layer for multi-agent work: a unified command center, cross-harness configuration, hybrid memory routing, low-latency voice interaction, and deterministic evaluation harnesses.
+| Repository | What it does |
+| :--- | :--- |
+| [**starlight-voice**](https://github.com/Starlight-Intelligence/starlight-voice) | Personal voice operator: Tauri tray, Pipecat sidecar, push-to-talk with a sub-800 ms hot path. |
+| [**starlight-design-intelligence**](https://github.com/Starlight-Intelligence/starlight-design-intelligence) | Brand packs, motion systems, and interface review doctrine for FrankX, Starlight, and Arcanea. |
+| [**starlight-agent-skills**](https://github.com/Starlight-Intelligence/starlight-agent-skills) | Portable substrate skills for Claude Code, Codex, Cursor, Gemini, and OpenCode. |
+| [**starlight-evals**](https://github.com/Starlight-Intelligence/starlight-evals) | Evaluation harness for models, memory, retrieval, and multi-agent routing. |
+| [**starlight-technology**](https://github.com/Starlight-Intelligence/starlight-technology) | Hardware sizing, local inference benchmarks, and buying intelligence for AI-native teams. |
+| [**marketing-intelligence**](https://github.com/Starlight-Intelligence/marketing-intelligence) | Agentic marketing system: content, search, and distribution patterns with worked examples. |
+
+The cockpit, kernel, agent configuration, and memory routing are private while they mature. Each public
+repository above is usable without the private layer.
 
 ## System topology
 
@@ -22,36 +36,31 @@ flowchart LR
   DI["starlight-design-intelligence<br/>Brand packs & UI tokens"] --> CC
 ```
 
-## Flagship repositories
-
-| Repository | Purpose | Link |
-| :--- | :--- | :--- |
-| [**starlight-voice**](https://github.com/Starlight-Intelligence/starlight-voice) | Personal voice operator with local STT/TTS, session memory, and real-time visualization. | [Website](https://starlightintelligence.ai) |
-| [**starlight-design-intelligence**](https://github.com/Starlight-Intelligence/starlight-design-intelligence) | Brand packs, typography scales, motion tokens, and editorial gates across the estate. | [Website](https://starlightintelligence.ai) |
-| [**starlight-agent-skills**](https://github.com/Starlight-Intelligence/starlight-agent-skills) | Portable Starlight substrate skills for Claude Code, Codex, Cursor, Gemini, and OpenCode. | [Website](https://starlightintelligence.org) |
-| [**starlight-evals**](https://github.com/Starlight-Intelligence/starlight-evals) | Whole-system evaluation harness testing models, memory recall, skills, and multi-agent routing. | [Website](https://starlightintelligence.org) |
-| [**starlight-technology**](https://github.com/Starlight-Intelligence/starlight-technology) | Hardware sizing, local inference benchmarks, and workstation architecture guides. | [Website](https://starlightintelligence.ai) |
-
-## Quickstart
+## Start here
 
 ```bash
-# Install portable Starlight substrate skills
-npx @starlight-intelligence/sis@latest init
+# Memory provider contract and CLI
+npm install @starlight-intelligence/memory
 
-# Run whole-system evaluation checks
+# Run the evaluation harness
 git clone https://github.com/Starlight-Intelligence/starlight-evals.git
-cd starlight-evals && npm test
+cd starlight-evals && npm install && npm test
 ```
 
 ## Engineering standards
 
-Every repository in **Starlight Intelligence** follows the Starlight estate engineering contract:
+Every repository in this org follows the Starlight estate contract:
 
-1. **Draft-first pull requests**: Open pull requests in draft mode (`gh pr create --draft`). CI workflows run only when a pull request is marked ready for review or lands on `main`.
-2. **Independent verification**: Maker harness and Checker harness must differ (`Maker-Harness` != `Checker-Harness`).
-3. **Zero committed secrets**: Credentials live in local environment files or Infisical. Pre-commit and CI gates reject secret patterns.
-4. **Editorial clarity**: Public documentation uses sentence case headings, concrete verbs, and verified metrics.
+1. **Draft-first pull requests.** A pull request starts as a draft and is marked ready when its checks pass.
+2. **Independent verification.** The harness that made the change is not the harness that approves it.
+3. **No committed secrets.** Credentials live in local environment files or Infisical; pre-commit and CI reject secret patterns.
+4. **Readable documentation.** Sentence case headings, concrete verbs, and claims that point at evidence.
+
+## Repository status
+
+Every repository states its own state at the top of its README: active, experimental, or retired. Retired
+repositories are archived rather than deleted, and each one carries a note naming its successor.
 
 ---
 
-<sub>Maintained by <a href="https://github.com/frankxai">Frank Riemer (frankxai)</a> Â· Built on the <a href="https://github.com/Starlight-Intelligence-Systems/Starlight-Intelligence-System">Starlight Intelligence Protocol (SIP)</a></sub>
+<sub>Maintained by <a href="https://github.com/frankxai">Frank Riemer</a> Â· Built on the <a href="https://github.com/Starlight-Intelligence-Systems/Starlight-Intelligence-System">Starlight Intelligence Protocol</a></sub>
