@@ -6,8 +6,8 @@ const HEAD = 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678';
 const codexBot = { login: 'chatgpt-codex-connector[bot]', type: 'Bot' };
 const claudeBot = { login: 'claude[bot]', type: 'Bot' };
 const human = { login: 'frankxai', type: 'User' };
-const greenCI = [{ name: 'test', status: 'completed', conclusion: 'success' }];
-const cleanReview = { user: codexBot, commitId: HEAD, state: 'COMMENTED', body: "Codex Review: Didn't find any major issues." };
+const greenCI = [{ id: 1, name: 'test', status: 'completed', conclusion: 'success', appId: 15368, workflowPath: '.github/workflows/ci.yml', headSha: HEAD, runId: 1, runAttempt: 1 }];
+const cleanReview = { user: codexBot, commitId: HEAD, state: 'APPROVED', body: '' };
 
 const base = (over = {}) => ({
   headRef: 'agent/claude/thing',
@@ -20,14 +20,16 @@ const base = (over = {}) => ({
   comments: [],
   reviews: [cleanReview],
   checkRuns: greenCI,
-  requiredChecks: ['test'],
+  requiredChecks: [{ name: 'test', appId: 15368, workflowPath: '.github/workflows/ci.yml' }],
   unresolvedThreads: 0,
   ...over,
 });
 
-test('clean Claude PR with a clean Codex bot review on head passes', () => {
+test('clean observed checks and review still need authenticated maker-provider evidence', () => {
   const d = decide(base());
-  assert.equal(d.ok, true, JSON.stringify(d));
+  assert.equal(d.ok, false, JSON.stringify(d));
+  assert.equal(d.reasons.length, 0, JSON.stringify(d));
+  assert.match(d.waiting.join(), /provider independence unverified/);
   assert.deepEqual(d.signers, ['codex']);
 });
 
@@ -83,15 +85,16 @@ test('renames are judged on both ends', () => {
   assert.equal(decide(base({ files: [{ filename: 'app/new/page.tsx', previousFilename: 'app/about/page.tsx', status: 'renamed' }] })).ok, false);
 });
 
-test('Claude bot approval signs a Codex PR on the exact head', () => {
+test('Claude bot approval is observed but cannot attest the maker provider', () => {
   const d = decide(base({ headRef: 'codex/x', reviews: [{ user: claudeBot, commitId: HEAD, state: 'APPROVED', body: '' }] }));
-  assert.equal(d.ok, true, JSON.stringify(d));
+  assert.equal(d.ok, false, JSON.stringify(d));
+  assert.deepEqual(d.signers, ['claude']);
   assert.equal(shaMatches(HEAD, 'a1b2'), false);
 });
 
 test('required checks must exist and pass; skipped or unrelated green is not CI', () => {
   assert.match(decide(base({ checkRuns: [] })).reasons.join(), /never ran/);
-  assert.match(decide(base({ checkRuns: [{ name: 'docs', status: 'completed', conclusion: 'success' }, { name: 'test', status: 'completed', conclusion: 'skipped' }] })).reasons.join(), /did not pass: test \(skipped\)/);
+  assert.match(decide(base({ checkRuns: [{ name: 'docs', status: 'completed', conclusion: 'success' }, { ...greenCI[0], conclusion: 'skipped' }] })).reasons.join(), /did not pass: test \(skipped\)/);
   assert.match(decide(base({ requiredChecks: [] })).reasons.join(), /no required CI checks/);
 });
 

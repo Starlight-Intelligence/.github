@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       merge:
-        description: Squash-merge when every condition passes. False = report only.
+        description: Reserved for compatibility. True is refused; this gate is report-only.
         required: false
         type: boolean
         default: false
@@ -19,43 +19,107 @@ on:
         description: Commit of Starlight-Intelligence/.github to load the gate from. Pin it to the same SHA as the uses line.
         required: false
         type: string
-        default: main
+        default: ''
       required-checks:
         description: Comma-separated check run names that must pass on the head commit, e.g. "test, build".
         required: true
         type: string
       wait-minutes:
-        description: How long to wait for running CI when it is the only thing outstanding.
+        description: Deprecated compatibility input. Reports are immediate and never poll.
         required: false
         type: number
         default: 8
 
 jobs:
+  resolve-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      pr-number: ${{ steps.resolve.outputs.pr-number }}
+    steps:
+      - name: Require the same immutable resolver and reusable source
+        env:
+          GATE_REF: ${{ inputs.gate-ref }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          node <<'NODE'
+          // source-ref-validator:start
+          const e = process.env;
+          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || (e.JOB_WORKFLOW_REPOSITORY || '').toLowerCase() !== 'starlight-intelligence/.github') process.exit(1);
+          // source-ref-validator:end
+          NODE
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Starlight-Intelligence/.github
+          ref: ${{ inputs.gate-ref }}
+          path: .pr-gate
+          persist-credentials: false
+      - name: Resolve only an API-authenticated current PR
+        id: resolve
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { createClient, resolvePrNumber } from './.pr-gate/pr-gate/run.mjs';
+          const number = await resolvePrNumber(process.env, createClient(process.env.GITHUB_TOKEN));
+          appendFileSync(process.env.GITHUB_OUTPUT, `pr-number=${number ?? ''}\n`);
+          NODE
+
   decide:
+    needs: resolve-pr
+    if: needs.resolve-pr.outputs.pr-number != ''
+    # Only eligible, resolved reports join this group. An unrelated comment
+    # cannot cancel a run, and all event types for the same PR serialize here.
+    concurrency:
+      group: starlight-pr-gate-${{ github.repository }}-${{ needs.resolve-pr.outputs.pr-number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       checks: read
+      actions: read
     steps:
+      - name: Require an immutable gate source
+        env:
+          GATE_REF: ${{ inputs.gate-ref }}
+          JOB_WORKFLOW_SHA: ${{ job.workflow_sha }}
+          JOB_WORKFLOW_REPOSITORY: ${{ job.workflow_repository }}
+        run: |
+          node <<'NODE'
+          // source-ref-validator:start
+          const e = process.env;
+          if (!/^[a-f0-9]{40}$/.test(e.GATE_REF || '') || e.GATE_REF !== e.JOB_WORKFLOW_SHA || (e.JOB_WORKFLOW_REPOSITORY || '').toLowerCase() !== 'starlight-intelligence/.github') process.exit(1);
+          // source-ref-validator:end
+          NODE
       - name: Load the gate
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Starlight-Intelligence/.github
           ref: ${{ inputs.gate-ref }}
           path: .pr-gate
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
 
       - name: Decide
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_NUMBER: ${{ needs.resolve-pr.outputs.pr-number }}
+          # Resolve once before the per-PR lock; do not resolve a second time
+          # under a workflow_run event and accidentally select another PR.
+          PR_GATE_EVENT_RESOLVED: 'true'
           PR_GATE_MERGE: ${{ inputs.merge }}
           PR_GATE_WAIT_MINUTES: ${{ inputs.wait-minutes }}
           PR_GATE_REQUIRED_CHECKS: ${{ inputs.required-checks }}

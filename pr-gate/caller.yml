@@ -1,7 +1,7 @@
 # Copy to .github/workflows/pr-gate.yml in a product repo, with poke.yml beside it.
 # Replace GATE_SHA (both places) with a commit of Starlight-Intelligence/.github, list the repo's CI
-# workflow names under workflow_run and its check names in required-checks, and set merge to true
-# only where autonomous landing is ruled.
+# workflow names under workflow_run and authenticated contexts in required-checks.
+# This gate remains report-only; merge=true is refused.
 #
 # Every trigger here runs this file from the default branch, never from the PR, so a PR cannot
 # rewrite the gate it is judged by. Reviews arrive through pr-gate-poke (no permissions) and come
@@ -18,14 +18,11 @@ on:
     types: [completed]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
   issues: write
   checks: read
-
-concurrency:
-  group: pr-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.display_title }}
-  cancel-in-progress: true
+  actions: read
 
 jobs:
   pr-gate:
@@ -39,9 +36,9 @@ jobs:
         (github.event.comment.body == '/gate' && contains(fromJSON('["OWNER","MEMBER"]'), github.event.comment.author_association))))
     uses: Starlight-Intelligence/.github/.github/workflows/pr-gate.yml@GATE_SHA
     with:
-      # Reusable inputs are typed; the number is passed as a string. A relayed review with no PR
-      # attached falls back to the poke run title, which is the PR number.
-      pr-number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.display_title) }}
-      required-checks: test
+      # workflow_run resolves its PR from API-authenticated run/repository/head data.
+      pr-number: ${{ format('{0}', github.event.pull_request.number || github.event.issue.number || 0) }}
+      required-checks: >-
+        [{"name":"test","appId":15368,"workflowPath":".github/workflows/ci.yml"}]
       merge: false
       gate-ref: GATE_SHA

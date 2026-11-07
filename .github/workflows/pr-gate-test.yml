@@ -11,6 +11,9 @@ concurrency:
   group: pr-gate-test-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,4 +23,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test pr-gate/decide.test.mjs
+      - run: node --test pr-gate/*.test.mjs
