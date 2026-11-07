@@ -28,11 +28,11 @@ async function api(path, init = {}) {
   return res.status === 204 ? null : res.json();
 }
 // Fails closed: running out of pages before running out of items is an error, never a short list.
-async function all(path) {
+async function all(path, accept) {
   const out = [];
   for (let page = 1; page <= 50; page++) {
     const sep = path.includes('?') ? '&' : '?';
-    const batch = await api(`${path}${sep}per_page=100&page=${page}`);
+    const batch = await api(`${path}${sep}per_page=100&page=${page}`, accept ? { headers: { accept } } : {});
     const items = Array.isArray(batch) ? batch : batch.check_runs;
     out.push(...items);
     if (items.length < 100) return out;
@@ -60,8 +60,8 @@ async function facts() {
   const head = pr.head.sha;
   const [files, comments, reviews, checkRuns, threads] = await Promise.all([
     all(`/repos/${repo}/pulls/${number}/files`),
-    all(`/repos/${repo}/issues/${number}/comments`),
-    all(`/repos/${repo}/pulls/${number}/reviews`),
+    all(`/repos/${repo}/issues/${number}/comments`, 'application/vnd.github.full+json'),
+    all(`/repos/${repo}/pulls/${number}/reviews`, 'application/vnd.github-commitcomment.full+json'),
     // filter=latest: only the newest attempt of each check counts, so a rerun that failed wins
     // over an older success.
     all(`/repos/${repo}/commits/${head}/check-runs?filter=latest`),
@@ -81,8 +81,8 @@ async function facts() {
       body: pr.body || '',
       labels: pr.labels.map((l) => l.name),
       files: files.map((x) => ({ filename: x.filename, status: x.status, previousFilename: x.previous_filename })),
-      comments: comments.filter((c) => !String(c.body || '').includes(STICKY)).map((c) => ({ body: c.body, user: c.user, createdAt: c.created_at })),
-      reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body })),
+      comments: comments.filter((c) => !String(c.body || '').includes(STICKY)).map((c) => ({ body: c.body, bodyText: c.body_text, bodyHTML: c.body_html, user: c.user, createdAt: c.created_at })),
+      reviews: reviews.map((r) => ({ user: r.user, commitId: r.commit_id, state: r.state, body: r.body, bodyText: r.body_text, bodyHTML: r.body_html })),
       checkRuns: checkRuns.map((r) => ({ name: r.name, status: r.status, conclusion: r.conclusion })),
       unresolvedThreads: threads,
       selfPrefix,
@@ -134,7 +134,7 @@ const lines = [
 ].filter(Boolean);
 const body = lines.join('\n');
 
-const existing = (await all(`/repos/${repo}/issues/${number}/comments`)).find((c) => String(c.body || '').includes(STICKY));
+const existing = (await all(`/repos/${repo}/issues/${number}/comments`, 'application/vnd.github.full+json')).find((c) => String(c.body || '').includes(STICKY));
 if (existing) await api(`/repos/${repo}/issues/comments/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ body }) });
 else await api(`/repos/${repo}/issues/${number}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
 
