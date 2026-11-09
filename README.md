@@ -5,6 +5,8 @@ This repository defines organization-wide community health files, agent operatin
 ## Contents
 
 - [`profile/README.md`](./profile/README.md) â€” Public organization profile rendered on `https://github.com/Starlight-Intelligence`.
+- [`CHARTER.md`](./CHARTER.md): The Starlight Charter, ten articles for running a fleet of agents (v1.0.0, 2026-11-03).
+- [`VOCABULARY.md`](./VOCABULARY.md): The Starlight Vocabulary, the 23 terms the charter uses.
 - [`AGENTS.md`](./AGENTS.md) â€” Organization-wide operating contract for coding agents (Claude Code, Codex, Grok, Antigravity, Hermes, OpenCode).
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) â€” Branch naming, draft-PR workflow, and verification requirements.
 - [`SECURITY.md`](./SECURITY.md) â€” Secret hygiene and vulnerability reporting policy.
