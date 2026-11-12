@@ -29,10 +29,11 @@ Brand register: `sis`
 
 ## Repository roster
 
-This organisation holds 33 active repositories and 11 archived ones. Do not work from a
-hardcoded list in this file, and do not trust a list you find elsewhere in the estate:
-read [`ORG-MAP.md`](./ORG-MAP.md). It carries one row per active repository with status,
-entry point, language and visibility, and it states the date it was verified.
+This organisation holds more repositories than are listed in this file. Do not work
+from a hardcoded list in this file, and do not trust a list you find elsewhere in the
+estate: read [`ORG-MAP.md`](./ORG-MAP.md). It carries one row per public repository
+with status, entry point and language, and it states the date it was verified. Private
+repositories are not indexed there; access is by invitation.
 
 Two ownership facts that are not obvious from a repository name:
 
