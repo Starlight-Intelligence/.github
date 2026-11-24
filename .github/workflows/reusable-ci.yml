@@ -7,6 +7,14 @@ on:
         required: false
         type: string
         default: '22'
+      runner:
+        required: false
+        type: string
+        default: 'ubuntu-slim'
+      timeout-minutes:
+        required: false
+        type: number
+        default: 10
       run-build:
         required: false
         type: boolean
@@ -20,8 +28,8 @@ jobs:
   verify:
     name: Verify (Draft-Gated)
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,14 +46,20 @@ jobs:
             exit 1
           fi
 
-      - name: Install and test
+      - name: Install, test, and optional build
         run: |
           if [ -f package.json ]; then
             if [ -f pnpm-lock.yaml ]; then
               corepack enable && pnpm install --frozen-lockfile
               pnpm test --if-present
+              if [ "${{ inputs.run-build }}" = "true" ]; then
+                pnpm run build --if-present
+              fi
             elif [ -f package-lock.json ]; then
               npm ci
               npm test --if-present
+              if [ "${{ inputs.run-build }}" = "true" ]; then
+                npm run build --if-present
+              fi
             fi
           fi
